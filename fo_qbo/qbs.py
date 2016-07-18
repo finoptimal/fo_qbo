@@ -10,7 +10,7 @@ Please contact developer@finoptimal.com with questions or comments.
 """
 
 from rauth import OAuth1Session
-import json, time
+import datetime, json, time
 
 def retry(max_tries=10, delay_secs=0.1):
     """
@@ -47,12 +47,13 @@ class QBS(object):
     """
     Basic unit of engagement, an rauth OAuth1Session wrapper.
     """
-    API_BASE_URL = "https://quickbooks.api.intuit.com/v3"
-    
+    API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
+    UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
+
     def __init__(self, consumer_key, consumer_secret,
                  access_token=None, access_token_secret=None, company_id=None,
-                 connector_callback=None, reconnector_callback=None,
-                 verbosity=0):
+                 connector_callback=None, callback_url=None, expires_on=None,
+                 reconnector_callback=None, verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -69,6 +70,8 @@ class QBS(object):
         self.vb  = verbosity
 
         self.ccb = connector_callback
+        self.cbu = callback_url
+        self.exo = expires_on
         self.rcb = reconnector_callback
         
         self._setup()
@@ -88,8 +91,6 @@ class QBS(object):
     @retry(max_tries=1)
     def _basic_call(self, request_type, url, data=None, **params):
         """
-        For query results, this handles pagination...no one wants to do that.
-
         params often get used for the Reports API, not for CRUD ops.
         """
         headers  = {"accept" : "application/json"}
@@ -102,7 +103,7 @@ class QBS(object):
                 # (basically for queries only)
                 headers["Content-Type"] = "application/text"
 
-        if self.vb > 9:
+        if self.vb > 15:
             print json.dumps(data, indent=4)
             print "Above is the request body about to go here:"
             print url
@@ -113,7 +114,9 @@ class QBS(object):
             verify=True, headers=headers, data=data, **params)
 
         if response.status_code in [200]:
-            return response.json()
+            rj = response.json()
+            self.last_call_time = rj.get("time")
+            return rj
         
         if self.vb > 4:
             try:
@@ -125,22 +128,51 @@ class QBS(object):
         """
         where_tail example: WHERE Active IN (true,false) ... the syntax is
          SQLike and documented in Intuit's documentation.
-        """
-        select_what = "COUNT(*)" if count_only else "*"
-        if not where_tail:
-            where_tail = ""
-        query       = "SELECT {} FROM {}{}".format(
-            select_what, object_type, where_tail)
-        url = "{}/company/{}/query".format(self.API_BASE_URL, self.cid)
 
-        return self._basic_call("POST", url, data=query)
+        Handles pagination, because that's just no fun at all.
+        """
+        queried_all = False
+        
+        select_what = "COUNT(*)" if count_only else "*"
+        if where_tail:
+            where_tail = " " + where_tail
+        else:
+            where_tail = ""
+        query       = "SELECT {} FROM {}{} MAXRESULTS 1000".format(
+            select_what, object_type, where_tail)
+        url = "{}/{}/query".format(self.API_BASE_URL, self.cid)
+
+        all_objs = []
+
+        if object_type in self.UNQUERIABLE_OBJECT_TYPES:
+            raise Exception("Can't query QB {} objects!".format(object_type))
+        
+        base_len = len(query)
+        while not queried_all:
+            if self.vb > 7:
+                print query
+            resp =  self._basic_call("POST", url, data=query)
+            if count_only:
+                return resp["QueryResponse"]["totalCount"]
+            objs           = resp["QueryResponse"].get(object_type, [])
+            start_position = resp["QueryResponse"].get("startPosition", 0)
+            max_results    = resp["QueryResponse"].get("maxResults", 0)
+
+            all_objs      += objs
+            if max_results < 1000:
+                queried_all = True
+
+            query = query[:base_len] + " STARTPOSITION {}".format(
+                start_position + 1000)
+
+        return all_objs
         
     def create(self, object_type, object_dict):
         """
         The object type isn't actually included in the object_dict, which is
          why you also have to pass that in (first).
         """
-        url = "{}/company/{}/{}".format(
+        url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
 
         return self._basic_call("POST", url, data=object_dict)
@@ -149,7 +181,7 @@ class QBS(object):
         """
         Just returns a single object, no questions asked.
         """
-        url = "{}/company/{}/{}/{}".format(
+        url = "{}/{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower(), object_id)
         
         return self._basic_call("GET", url)
@@ -160,7 +192,7 @@ class QBS(object):
          dict when making this call (otherwise the class won't know how you
          want to change the object in question).
         """
-        url = "{}/company/{}/{}".format(
+        url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
 
         return self._basic_call("POST", url, data=object_dict)
@@ -172,7 +204,7 @@ class QBS(object):
          the method does a read call to GET the object_dict, then performs
          the same as if an object_dict had been passed in
         """
-        url = "{}/company/{}/{}".format(
+        url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
 
         if object_id and not object_dict:
@@ -185,3 +217,34 @@ class QBS(object):
         
         return self._basic_call(
             "POST", url, data=skinny_dict, params={"operation" : "delete"})
+
+    def change_data_capture(self, utc_since, object_types):
+        """
+        https://developer.intuit.com/docs/api/accounting/ChangeDataCapture
+
+        Note that this only gets you changes from the last 30 days
+
+        object_types should be a list, e.g. 
+         ["Purchase", "JournalEntry", "Vendor"]
+
+        Watch out for the deletion bug on JournalEntry...it won't tell you about
+         deleted JournalEntry objects! QBO-94274 is the bug number (though it's 
+         not listed in the API documentation's known issues).
+        """
+        url = "{}/{}/cdc".format(self.API_BASE_URL, self.cid) 
+        
+        if isinstance(utc_since, datetime.datetime):
+            # Either pass in a UTC datetime or a string formatted like this: 
+            utc_since = utc_since.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+        params = {
+            "changedSince" : utc_since,
+            "entities"     : ",".join(object_types)}
+
+        if self.vb > 4:
+            print "CDC Params:"
+            print json.dumps(params, indent=4)
+
+        # This will be a list of dictionaries, each of which relates to
+        #  a specific response...
+        return self._basic_call("GET", url, params=params)

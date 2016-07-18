@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse, json, time
+import argparse, datetime, json, pytz, time
 import fo_qbo
 
 parser = argparse.ArgumentParser()
@@ -16,6 +16,12 @@ parser.add_argument("-cc", "--consumer_creds",
                     nargs=2,
                     default=None,
                     help="key then secret")
+
+parser.add_argument("-cdc", "--change_data_capture", 
+                    type=str,
+                    nargs="*",
+                    default=None,
+                    help="Get 15 days of these objects' changes")
 
 parser.add_argument("-ci", "--company_id", 
                     type=str,
@@ -75,24 +81,13 @@ if __name__=='__main__':
                        "AccountSubType" : "TrustAccounts"}
         rd = sesh.create("Account", object_dict)
         print json.dumps(rd, indent=4)
-        
-    if args.read:
-        rd = sesh.read(*args.read)
-        print json.dumps(rd, indent=4)
 
-    if args.update:
-        print "This just toggles active / inactive for the first found account."
-        accts = sesh.query("Account")
-        for acct in accts["QueryResponse"]["Account"]:
-            if acct["Name"] == args.update:
-                if acct["Active"]:
-                    acct["Active"] = False
-                else:
-                    acct["Active"] = True
-                break
-        rd    = sesh.update("Account", acct)
+    if args.change_data_capture:
+        utc_since = datetime.datetime.utcnow().replace(
+                tzinfo=pytz.utc) - datetime.timedelta(days=15)
+        rd = sesh.change_data_capture(utc_since, args.change_data_capture)
         print json.dumps(rd, indent=4)
-                    
+        
     if args.delete:
         # Find or create a bank account called "FinOptimal Rocks Bank"
         accts = sesh.query("Account")
@@ -151,6 +146,23 @@ if __name__=='__main__':
         
         rd = sesh.delete("Purchase", deletable_purch_dict["Id"])
         print json.dumps(rd, indent=4)
+
+    if args.read:
+        rd = sesh.read(*args.read)
+        print json.dumps(rd, indent=4)
+
+    if args.update:
+        print "This just toggles active / inactive for the first found account."
+        accts = sesh.query("Account")
+        for acct in accts["QueryResponse"]["Account"]:
+            if acct["Name"] == args.update:
+                if acct["Active"]:
+                    acct["Active"] = False
+                else:
+                    acct["Active"] = True
+                break
+        rd    = sesh.update("Account", acct)
+        print json.dumps(rd, indent=4)                    
 
     end = time.time()
 

@@ -1,5 +1,5 @@
 # fo_qbo
-FinOptimal's Python wrapper around the QBO REST API (v3, on the verge of v4 at the time of this writing)
+[FinOptimal](www.finoptimal.com)'s Python wrapper around the QBO REST API (v3, on the verge of v4 at the time of this writing)
 
 Here are some helpful API Documentation URLs current as of the time of this writing:
  * [Accounting](https://developer.intuit.com/docs/api/accounting)
