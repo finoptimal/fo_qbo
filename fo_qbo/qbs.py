@@ -88,7 +88,7 @@ class QBS(object):
         # At this point, we're assumed to have a fresh, working access_token
         self.sess = OAuth1Session(self.ck, self.cs, self.at, self.ats)
 
-    @retry(max_tries=1)
+    @retry(max_tries=5)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
@@ -154,11 +154,24 @@ class QBS(object):
             resp =  self._basic_call("POST", url, data=query)
             if count_only:
                 return resp["QueryResponse"]["totalCount"]
+
+            if not resp or not "QueryResponse" in resp:
+                if self.vb > 1:
+                    print "Failed query was:"
+                    print query
+                raise Exception("Failed QBO Query")
+            
             objs           = resp["QueryResponse"].get(object_type, [])
             start_position = resp["QueryResponse"].get("startPosition", 0)
             max_results    = resp["QueryResponse"].get("maxResults", 0)
 
             all_objs      += objs
+
+            if self.vb > 4 and max_results > 0:
+                print "Queried {:20s} objects {:>4} through {:4>}.".format(
+                    object_type, start_position,
+                    start_position + max_results - 1)
+
             if max_results < 1000:
                 queried_all = True
 
