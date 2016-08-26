@@ -261,3 +261,12 @@ class QBS(object):
         # This will be a list of dictionaries, each of which relates to
         #  a specific response...
         return self._basic_call("GET", url, params=params)
+
+    def report(self, report_name, **params):
+        """
+        Use the QBO reporting API, documented here:
+        """
+        url = "{}/{}/reports/{}".format(
+            self.API_BASE_URL, self.cid, report_name)
+        
+        return self._basic_call("GET", url, **{"params" : params})

@@ -51,6 +51,11 @@ parser.add_argument("-r", "--read",
                     default=None,
                     help="object_type and object_id")
 
+parser.add_argument("-rp", "--report", 
+                    type=str,
+                    default=None,
+                    help="report name")
+
 parser.add_argument("-u", "--update",
                     type=str,
                     default=None,
@@ -150,7 +155,7 @@ if __name__=='__main__':
     if args.read:
         rd = sesh.read(*args.read)
         print json.dumps(rd, indent=4)
-
+        
     if args.update:
         print "This just toggles active / inactive for the first found account."
         accts = sesh.query("Account")
@@ -164,6 +169,18 @@ if __name__=='__main__':
         rd    = sesh.update("Account", acct)
         print json.dumps(rd, indent=4)                    
 
+    ########## Now to test things beyond basic crud ########## 
+
+    if args.report:
+        rp = sesh.report(
+            args.report, **{
+                "accounting_method"   : "Cash",
+                "summarize_column_by" : "Year",
+                "start_date"          : "2012-06-02",
+                "end_date"            : "2017-02-27"})
+        
+        print json.dumps(rp, indent=4)
+        
     end = time.time()
 
     if args.verbosity > 0:
