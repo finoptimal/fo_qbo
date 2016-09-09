@@ -281,7 +281,7 @@ class QBS(object):
         if not raw:
             print "No json-formatted {} {} report to start with. rp_params:".\
                 format(self.cid, report_name)
-            print json.dumps(rp_params, indent=4)
+            print json.dumps(params, indent=4)
             raise Exception()
         elif not "Header" in raw.keys():
             print json.dumps(raw, indent=4)
