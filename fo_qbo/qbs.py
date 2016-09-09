@@ -103,16 +103,23 @@ class QBS(object):
                 # (basically for queries only)
                 headers["Content-Type"] = "application/text"
 
-        if self.vb > 15:
+        if self.vb > 7:
             print json.dumps(data, indent=4)
             print "Above is the request body about to go here:"
             print url
-            raw_input("<press any key to continue>")
+            print "Below are the call's params:"
+            print json.dumps(params, indent=4)
+            if self.vb > 15:
+                raw_input("<press any key to continue>")
                 
         response = self.sess.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
 
+        if self.vb > 5:
+            print "The final URL (with params):"
+            print response.url
+        
         if response.status_code in [200]:
             rj = response.json()
             self.last_call_time = rj.get("time")
@@ -269,4 +276,20 @@ class QBS(object):
         url = "{}/{}/reports/{}".format(
             self.API_BASE_URL, self.cid, report_name)
         
-        return self._basic_call("GET", url, **{"params" : params})
+        raw = self._basic_call("GET", url, **{"params" : params})
+
+        if not raw:
+            print "No json-formatted {} {} report to start with. rp_params:".\
+                format(self.cid, report_name)
+            print json.dumps(rp_params, indent=4)
+            raise Exception()
+        elif not "Header" in raw.keys():
+            print json.dumps(raw, indent=4)
+            print "No Header item in raw (above)!?"
+            raise Exception()
+        
+        if self.vb > 7:
+            print json.dumps(raw["Header"], indent=4)
+            print '(raw["Header"] is above)'
+
+        return raw
