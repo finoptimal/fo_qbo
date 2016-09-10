@@ -275,7 +275,10 @@ class QBS(object):
         """
         url = "{}/{}/reports/{}".format(
             self.API_BASE_URL, self.cid, report_name)
-        
+
+        if self.vb > 2:
+            print json.dumps(params, indent=4)
+                            
         raw = self._basic_call("GET", url, **{"params" : params})
 
         if not raw:
@@ -288,7 +291,7 @@ class QBS(object):
             print "No Header item in raw (above)!?"
             raise Exception()
         
-        if self.vb > 7:
+        if self.vb > 2:
             print json.dumps(raw["Header"], indent=4)
             print '(raw["Header"] is above)'
 
