@@ -12,7 +12,7 @@ Please contact developer@finoptimal.com with questions or comments.
 from rauth import OAuth1Session
 import datetime, json, time
 
-def retry(max_tries=10, delay_secs=0.1):
+def retry(max_tries=10, delay_secs=0.2):
     """
     Produces a decorator which tries effectively the function it decorates
      a given number of times. Because the QBO API has been known to respond
@@ -29,16 +29,20 @@ def retry(max_tries=10, delay_secs=0.1):
             """
             tries  = kwargs.get("tries", max_tries)
             delay  = kwargs.get("delay", delay_secs)
+
+            attempts = 0
             
             while True:
                 try:
                     return retriable_function(*args, **kwargs)
                     break
                 except:
-                    tries -= 1
+                    tries    -= 1
+                    attempts += 1
                     if tries <= 0:
                         raise
-                    time.sleep(delay)
+                    # slow down as failures accumulate in case it's transient
+                    time.sleep(delay * attempts)
                     
         return inner
     return decorator
@@ -59,6 +63,10 @@ class QBS(object):
          this module.
 
         It only works with a single company_id at a time.
+
+        connector_callback and reconnector_callback are what happens when
+         we first connect or when we reconnect, getting a new access token
+         in either case.
         """
         self.ck  = consumer_key
         self.cs  = consumer_secret
@@ -88,7 +96,7 @@ class QBS(object):
         # At this point, we're assumed to have a fresh, working access_token
         self.sess = OAuth1Session(self.ck, self.cs, self.at, self.ats)
 
-    @retry(max_tries=5)
+    @retry(max_tries=7)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
