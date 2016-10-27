@@ -12,6 +12,8 @@ Please contact developer@finoptimal.com with questions or comments.
 from rauth import OAuth1Session
 import datetime, json, time
 
+from .qba import QBAuth
+
 def retry(max_tries=10, delay_secs=0.2):
     """
     Produces a decorator which tries effectively the function it decorates
@@ -56,8 +58,7 @@ class QBS(object):
 
     def __init__(self, consumer_key, consumer_secret,
                  access_token=None, access_token_secret=None, company_id=None,
-                 connector_callback=None, callback_url=None, expires_on=None,
-                 reconnector_callback=None, verbosity=0):
+                 callback_url=None, expires_on=None, verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -77,10 +78,8 @@ class QBS(object):
         self.cid = company_id
         self.vb  = verbosity
 
-        self.ccb = connector_callback
         self.cbu = callback_url
         self.exo = expires_on
-        self.rcb = reconnector_callback
         
         self._setup()
 
@@ -90,12 +89,26 @@ class QBS(object):
          access_token (and, of course, accompanying secret), go through the
          connect workflow.
         """
+        self.qba  = QBAuth(
+            self.ck, self.cs, access_token=self.at,
+            access_token_secret=self.ats, expires_on=self.exo)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 
-        # At this point, we're assumed to have a fresh, working access_token
-        self.sess = OAuth1Session(self.ck, self.cs, self.at, self.ats)
+        if not self.qba.session:
+            if self.vb > 0:
+                print "No working access token...quitting!"
+                if self.vb > 1:
+                    print "Inspect self.qba, the QBAuth object:"
+                    import ipdb;ipdb.set_trace()
+            quit()
 
+        self.sess = self.qba.session
+
+        if self.qba.new_token and self.vb > 0:
+            print "New access token et al for company id {}.".format(self.cid)
+            print "Don't forget to store it!"
+        
     @retry(max_tries=7)
     def _basic_call(self, request_type, url, data=None, **params):
         """
