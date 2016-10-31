@@ -1,6 +1,5 @@
 from rauth import OAuth1Service, OAuth1Session
 from cStringIO import StringIO
-#from lxml import etree
 import datetime, json, time
 
 # Intuit OAuth Service URLs
@@ -81,6 +80,7 @@ class QBAuth(object):
             print "Please send the user here to authorize this app to access "
             print " their QBO data:\n"
             print self.authorize_url
+            authorized_callback_url = None
             while not authorized_callback_url:
                 authorized_callback_url = raw_input(
                     "\nPaste the entire callback URL back here (or ctrl-c):")
@@ -98,7 +98,7 @@ class QBAuth(object):
             # This is always QBO:
             data_source    = data_source_str.split("=")[1]     
 
-            return self.get_access_token_response(oauth_verifier)
+            return self.get_access_token_response(request_token, oauth_verifier)
             
     def _set_access_token(self, access_token, access_token_secret):
         # In case of access token retrieval after authorization or reconnect
@@ -135,7 +135,7 @@ class QBAuth(object):
         # User should be redirected here to authorize
         # Access token will be sent to callback url to be processed
         #  by rest of workflow
-        self.authorize_url = qbService.get_authorize_url(request_token)
+        return qbService.get_authorize_url(self.request_token)
 
     def get_access_token_response(self, oauth_token, oauth_verifier):
         """
@@ -145,16 +145,21 @@ class QBAuth(object):
 
         https://oauth.intuit.com/oauth/v1/get_access_token
         """
-        
-        print  "Elizabeth to implement call to QBO then set access_token" \
-            + "and access_token_secret."
 
-        access_token        = "Not Implemented Yet!"
-        access_token_secret = "Not Implemented Yet!"
+        if self.request_token is None or self.request_token_secret is None:
+            raise Exception("Request token and secret required for " \
+                    "access token retrieval")
         
+        qbService = OAuth1Service(
+            name="quickbooks-wrapper",
+            consumer_key=self.consumer_key,
+            consumer_secret=self.consumer_secret,
+            data = { 'oauth_verifier': oauth_verifier },
+            base_url=None)
+        access_token, access_token_secret = qbService.get_access_token(
+                self.request_token, self.request_token_secret)
+
         self._set_access_token(access_token, access_token_secret)
-
-        raise NotImplementedError("Remove once implemented")
 
     @property
     def time_to_renew(self):
@@ -185,19 +190,17 @@ class QBAuth(object):
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
-            resp      = qbSession.get(RECONNECT_URL)
+            resp      = qbSession.get(RECONNECT_URL,
+                    params = { 'format': 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
-            return self._parse_xml(resp.text)
+            return resp
         except:
             raise
 
-        print "Elizabeth to parse reponse for new access_token and " + \
-            "access_token_secret."
-    
-        access_token        = "Not Implemented Yet!"
-        access_token_secret = "Not Implemented Yet!"
+        access_token        = resp["oauth_token"]
+        access_token_secret = resp["oauth_token_secret"]
 
         self.expires_on     = str(
             datetime.datetime.now().date() + datetime.timedelta(days=180))
@@ -213,28 +216,12 @@ class QBAuth(object):
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
-            resp      = qbSession.get(DISCONNECT_URL)
+            resp      = qbSession.get(DISCONNECT_URL, 
+                    params = { 'format': 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
-            return self._parse_xml(resp.text)
-        except:
-            raise
-
-    def _parse_xml(self, text):
-        try:
-            """
-            io        = StringIO(text)
-            doc       = etree.parse(io)
-            root      = doc.getroot()
-            namespace = root.nsmap[None]
-            fields    = [ child.tag for child in root.getchildren() ]
-            jd        =  dict([
-                (field.strip("{%s}" % namespace), root.find(field).text)
-                for field in fields ])
-            return jd
-            """
-            pass
+            return resp
         except:
             raise
 
