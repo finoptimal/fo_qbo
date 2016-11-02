@@ -1,6 +1,5 @@
 from rauth import OAuth1Service, OAuth1Session
 from cStringIO import StringIO
-#from lxml import etree
 import datetime, json, time
 
 # Intuit OAuth Service URLs
@@ -11,7 +10,7 @@ AUTHORIZE_URL     = "https://appcenter.intuit.com/Connect/Begin"
 RECONNECT_URL     = "https://appcenter.intuit.com/api/v1/connection/reconnect"
 DISCONNECT_URL    = "https://appcenter.intuit.com/api/v1/connection/disconnect"
 
-CALLBACK_URL      = "a.b.com"
+CALLBACK_URL      = "http://a.b.com"
 
 RENEW_WINDOW_DAYS = 30
 
@@ -34,10 +33,13 @@ class QBAuth(object):
         self.callback_url        = callback_url
         self.oauth_token         = access_token
         self.oauth_token_secret  = access_token_secret
+        self.vb                  = verbosity
 
         # lets instantiator know to store new persistent data (if applicable)
         self.new_token           = False     
         
+        self.session = None  # until setup is complete
+
         self._setup()
 
     def _setup(self):
@@ -45,72 +47,55 @@ class QBAuth(object):
         Figure out if any action is required or if we can just create the
          OAuth1Session object without further ado.
         """
-        self.session = None  # until setup is complete
-        
-        if self.access_token and self.access_token_secret:
-            # Make sure the token isn't within the reconnect window. If it is,
-            #  reconnect, otherwise, do nothing else.
-            if self.time_to_renew:
-                return self._reconnect()
-                
-            self.session = OAuth1Session(
-                self.consumer_key, self.consumer_secret, self.access_token,
-                self.access_token_secret)
+        if not self.access_token or not self.access_token_secret:
+            if self.vb > 1:
+                print "Need access_token and access_token_secret!"
             return
         
-        if not self.access_token or not self.access_token_secret:
-            self.authorize_url = self._get_authorize_url()
-            
-            # Now, if a callback URL WAS provided, we assume that the
-            #  application needing the access token has a webserver set up that
-            #  will take send the user to self.authorize_url, then come back and
-            #  finish the final leg of the workflow once it gets the oauth_token
-            #  and oauth_token_secret (and the verifier) by calling
-            #  self.get_access_token_response() directly
-
-            if self.callback_url:
-                if self.vb > 1:
-                    print "Webserver should send user to self.authorize_url,"
-                    print " then come back once it has an oauth_token and an"
-                    print " oauth_token_secret."
-                return
-
-            # Otherwise, it's assumed that there's NOT going to be a webserver
-            #  involved, and we initiate the out-of-band workflow
-
-            print "Please send the user here to authorize this app to access "
-            print " their QBO data:\n"
-            print self.authorize_url
-            while not authorized_callback_url:
-                authorized_callback_url = raw_input(
-                    "\nPaste the entire callback URL back here (or ctrl-c):")
+        # Make sure the token isn't within the reconnect window. If it is,
+        #  reconnect, otherwise, do nothing else.
+        if self.expires_on and self.time_to_renew:
+            return self._reconnect()
                 
-            tail = authorized_callback_url.split("?")[1].strip()
-            request_token_str, oauth_verifier_str, \
-                company_id_str, data_source_str = tails.split("&")
+        self.session = OAuth1Session(
+            self.consumer_key, self.consumer_secret, self.access_token,
+            self.access_token_secret)
+        return
 
-            # These two things are the new value added
-            oauth_verifier = oauth_verifier_str.split("=")[1]
-            company_id     = company_id.split("=")[1]
+    def oob(self, callback_url=CALLBACK_URL):
+        """
+        Out of Band solution.
+        """
+        self.request_token, self.request_token_secret, self.authorize_url = \
+                self.get_authorize_url()
+            
+        print "Please send the user here to authorize this app to access "
+        print " their QBO data:\n"
+        print self.authorize_url
+        authorized_callback_url = None
+        while not authorized_callback_url:
+            authorized_callback_url = raw_input(
+                "\nPaste the entire callback URL back here (or ctrl-c):")
+                
+        tail = authorized_callback_url.split("?")[1].strip()
 
-            # This we already knew:
-            request_token  = oauth_token_str.split("=")[1]
-            # This is always QBO:
-            data_source    = data_source_str.split("=")[1]     
+        params = dict([ tuple(param.split("=")) for param in tail.split("&") ])
 
-            return self.get_access_token_response(oauth_verifier)
+        access_token, access_token_secret = \
+            self.get_access_token_response(
+                params['oauth_token'], params['oauth_verifier'])
+
+        self._set_access_token(access_token, access_token_secret)
             
     def _set_access_token(self, access_token, access_token_secret):
+
         # In case of access token retrieval after authorization or reconnect
         self.access_token        = access_token
         self.access_token_secret = access_token_secret
+        self._setup()
 
-        # Tells instantiator to store new token/secret and expipiry date
-        self.new_token           = True
+    def get_authorize_url(self):
 
-        return self._setup()
-
-    def _get_authorize_url(self):
         # Begin authorization process.
         # To be used when no access token/secret is supplied
         qbService = OAuth1Service(
@@ -126,16 +111,20 @@ class QBAuth(object):
         if not cbu:
             cbu = CALLBACK_URL
 
-        # We will need self.request_token and self.request_token_secret later to
-        #  exchange for an access_token_secret
-        self.request_token, \
-            self.request_token_secret = qbService.get_request_token(
-                params = { 'oauth_callback' : cbu })
+        try:
+            # We will need self.request_token and self.request_token_secret later to
+            #  exchange for an access_token_secret
+            request_token, request_token_secret = \
+                qbService.get_request_token(params = { 'oauth_callback' : cbu })
         
-        # User should be redirected here to authorize
-        # Access token will be sent to callback url to be processed
-        #  by rest of workflow
-        self.authorize_url = qbService.get_authorize_url(request_token)
+            # User should be redirected here to authorize
+            # Access token will be sent to callback url to be processed
+            #  by rest of workflow
+            authorize_url = qbService.get_authorize_url(request_token)
+        except:
+            raise
+
+        return request_token, request_token_secret, authorize_url
 
     def get_access_token_response(self, oauth_token, oauth_verifier):
         """
@@ -145,16 +134,25 @@ class QBAuth(object):
 
         https://oauth.intuit.com/oauth/v1/get_access_token
         """
-        
-        print  "Elizabeth to implement call to QBO then set access_token" \
-            + "and access_token_secret."
 
-        access_token        = "Not Implemented Yet!"
-        access_token_secret = "Not Implemented Yet!"
+        if self.request_token is None or self.request_token_secret is None:
+            raise Exception("Request token and secret required for " \
+                    "access token retrieval")
         
-        self._set_access_token(access_token, access_token_secret)
+        qbService = OAuth1Service(
+            name="quickbooks-wrapper",
+            consumer_key=self.consumer_key,
+            consumer_secret=self.consumer_secret,
+            access_token_url=ACCESS_TOKEN_URL,
+            base_url=None)
 
-        raise NotImplementedError("Remove once implemented")
+        access_token, access_token_secret = \
+            qbService.get_access_token(self.request_token, 
+                                       self.request_token_secret,
+                                       params = { 'oauth_token': oauth_token, 
+                                           'oauth_verifier': oauth_verifier })
+
+        return access_token, access_token_secret
 
     @property
     def time_to_renew(self):
@@ -177,6 +175,7 @@ class QBAuth(object):
         return False
     
     def _reconnect(self):
+
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
@@ -185,26 +184,30 @@ class QBAuth(object):
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
-            resp      = qbSession.get(RECONNECT_URL)
+            resp      = qbSession.get(RECONNECT_URL,
+                    params = { 'format': 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
-            return self._parse_xml(resp.text)
         except:
             raise
 
-        print "Elizabeth to parse reponse for new access_token and " + \
-            "access_token_secret."
-    
-        access_token        = "Not Implemented Yet!"
-        access_token_secret = "Not Implemented Yet!"
+        if resp.json()['ErrorCode'] > 0:
+            raise Exception("Reconnect failed with code %d (%d)" %
+                (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
+
+        access_token        = resp["oauth_token"]
+        access_token_secret = resp["oauth_token_secret"]
 
         self.expires_on     = str(
             datetime.datetime.now().date() + datetime.timedelta(days=180))
-        
-        return self._set_access_token(access_token, access_token_secret)
+
+        self.new_token = True        
+
+        self._set_access_token(access_token, access_token_secret)
 
     def disconnect(self):
+
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
@@ -213,28 +216,15 @@ class QBAuth(object):
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
-            resp      = qbSession.get(DISCONNECT_URL)
+            resp      = qbSession.get(DISCONNECT_URL, 
+                    params = { 'format': 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
-            return self._parse_xml(resp.text)
         except:
             raise
 
-    def _parse_xml(self, text):
-        try:
-            """
-            io        = StringIO(text)
-            doc       = etree.parse(io)
-            root      = doc.getroot()
-            namespace = root.nsmap[None]
-            fields    = [ child.tag for child in root.getchildren() ]
-            jd        =  dict([
-                (field.strip("{%s}" % namespace), root.find(field).text)
-                for field in fields ])
-            return jd
-            """
-            pass
-        except:
-            raise
+        if resp.json()['ErrorCode'] > 0:
+            raise Exception("Reconnect failed with code %d (%d)" %
+                (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
