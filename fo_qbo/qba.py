@@ -112,8 +112,9 @@ class QBAuth(object):
             cbu = CALLBACK_URL
 
         try:
-            # We will need self.request_token and self.request_token_secret later to
-            #  exchange for an access_token_secret
+            # We will need self.request_token and
+            #  self.request_token_secret later to exchange for an
+            #  access_token_secret
             request_token, request_token_secret = \
                 qbService.get_request_token(params = { 'oauth_callback' : cbu })
         
@@ -227,4 +228,3 @@ class QBAuth(object):
         if resp.json()['ErrorCode'] > 0:
             raise Exception("Reconnect failed with code %d (%d)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
-
