@@ -194,7 +194,8 @@ class QBAuth(object):
             raise
 
         if resp.json()['ErrorCode'] > 0:
-            raise Exception("Reconnect failed with code %d (%d)" %
+            print json.dumps(resp.json(), indent=4)
+            raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
         access_token        = resp["oauth_token"]
@@ -226,5 +227,6 @@ class QBAuth(object):
             raise
 
         if resp.json()['ErrorCode'] > 0:
-            raise Exception("Reconnect failed with code %d (%d)" %
+            print jsond.dumps(resp.json(), indent=4)
+            raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
