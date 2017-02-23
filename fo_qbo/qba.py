@@ -84,14 +84,21 @@ class QBAuth(object):
         access_token, access_token_secret = \
             self.get_access_token_response(
                 params['oauth_token'], params['oauth_verifier'])
+        self.company_id                   = params["realmId"]
+        print "This company's (realm) ID: {}".format(self.company_id)
 
         self._set_access_token(access_token, access_token_secret)
             
     def _set_access_token(self, access_token, access_token_secret):
-
         # In case of access token retrieval after authorization or reconnect
         self.access_token        = access_token
         self.access_token_secret = access_token_secret
+        if self.vb > 1:
+            print "New access token and secret set. Store these things!"
+        self.new_token           = True
+        self.expires_on          = str(
+            datetime.datetime.now().date() + datetime.timedelta(days=180))
+
         self._setup()
 
     def get_authorize_url(self):
@@ -200,11 +207,6 @@ class QBAuth(object):
 
         access_token        = resp["oauth_token"]
         access_token_secret = resp["oauth_token_secret"]
-
-        self.expires_on     = str(
-            datetime.datetime.now().date() + datetime.timedelta(days=180))
-
-        self.new_token = True        
 
         self._set_access_token(access_token, access_token_secret)
 

@@ -97,15 +97,14 @@ class QBS(object):
 
         if not self.qba.session:
             if self.vb > 0:
-                print "No working access token...quitting!"
-                if self.vb > 1:
+                print "QBS has no working access token!"
+                if self.vb > 8:
                     print "Inspect self.qba, the QBAuth object:"
                     import ipdb;ipdb.set_trace()
-            quit()
-
+            
         self.sess = self.qba.session
 
-        if self.qba.new_token and self.vb > 0:
+        if self.qba.new_token: # and self.vb > 0:
             print "New access token et al for company id {}.".format(self.cid)
             print "Don't forget to store it!"
         
@@ -140,17 +139,19 @@ class QBS(object):
         if self.vb > 5:
             print "The final URL (with params):"
             print response.url
-        
+            
         if response.status_code in [200]:
             rj = response.json()
             self.last_call_time = rj.get("time")
             return rj
         
-        if self.vb > 4:
+        if self.vb > 3:
             try:
                 print json.dumps(response.json(), indent=4)
             except:
                 print response.text
+
+        raise Exception("Bad response")
         
     def query(self, object_type, where_tail=None, count_only=False):
         """
@@ -179,15 +180,19 @@ class QBS(object):
         while not queried_all:
             if self.vb > 7:
                 print query
-            resp =  self._basic_call("POST", url, data=query)
-            if count_only:
-                return resp["QueryResponse"]["totalCount"]
+            resp = self._basic_call("POST", url, data=query)
 
             if not resp or not "QueryResponse" in resp:
                 if self.vb > 1:
                     print "Failed query was:"
                     print query
+                    if resp:
+                        print resp.text
+                        print resp.status_code
                 raise Exception("Failed QBO Query")
+
+            if count_only:
+                return resp["QueryResponse"]["totalCount"]
             
             objs           = resp["QueryResponse"].get(object_type, [])
             start_position = resp["QueryResponse"].get("startPosition", 0)
@@ -215,7 +220,7 @@ class QBS(object):
         """
         url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
-
+        
         return self._basic_call("POST", url, data=object_dict)
         
     def read(self, object_type, object_id):
