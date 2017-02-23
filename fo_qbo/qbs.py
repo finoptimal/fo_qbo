@@ -151,7 +151,7 @@ class QBS(object):
             except:
                 print response.text
 
-        raise Exception("Bad response")
+        raise Exception(response.text)
         
     def query(self, object_type, where_tail=None, count_only=False):
         """
