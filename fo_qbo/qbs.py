@@ -9,10 +9,11 @@ https://developer.intuit.com/v2/apiexplorer
 Please contact developer@finoptimal.com with questions or comments.
 """
 
-from rauth import OAuth1Session
-import datetime, json, time
+from rauth       import OAuth1Session
+import datetime, json, os, requests, textwrap, time
 
-from .qba import QBAuth
+from .qba        import QBAuth
+from .mime_types import MIME_TYPES
 
 def retry(max_tries=10, delay_secs=0.2):
     """
@@ -115,22 +116,41 @@ class QBS(object):
         """
         headers  = {"accept" : "application/json"}
 
+        if "download" in url:
+            headers = {}
+        
         if request_type.lower() in ["post"]:
             if isinstance(data, dict):
-                headers["Content-Type"] = "application/json"
-                data = json.dumps(data)
+                if "headers" in data:
+                    # It should be a dict, then...
+                    headers = data["headers"].copy()       # must be a dict
+                    data    = data["request_body"] + ""    # should text 
+                else:
+                    headers["Content-Type"] = "application/json"
+                    data = json.dumps(data)
             else:
                 # (basically for queries only)
                 headers["Content-Type"] = "application/text"
+                #headers["Content-Type"] = "text/plain"
 
         if self.vb > 7:
-            print json.dumps(data, indent=4)
+            if isinstance(data, dict) or not data:
+                print json.dumps(data, indent=4)
+            else:
+                if len(data) > 1500:
+                    print "First 500 characters of data:"
+                    print data[:750]
+                    print "\n...\n"
+                    print data[-750:]
+                else:
+                    print data
             print "Above is the request body about to go here:"
             print url
             print "Below are the call's params:"
             print json.dumps(params, indent=4)
             if self.vb > 15:
-                raw_input("<press any key to continue>")
+                print "inspect request_type, url, headers, data, and params:" 
+                import ipdb;ipdb.set_trace()
                 
         response = self.sess.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
@@ -141,10 +161,13 @@ class QBS(object):
             print response.url
             
         if response.status_code in [200]:
-            rj = response.json()
-            self.last_call_time = rj.get("time")
-            return rj
-        
+            if headers.get("accept") == "application/json":
+                rj = response.json()
+                self.last_call_time = rj.get("time")
+                return rj
+            else:
+                return response.text
+
         if self.vb > 3:
             try:
                 print json.dumps(response.json(), indent=4)
@@ -322,3 +345,113 @@ class QBS(object):
             print '(raw["Header"] is above)'
 
         return raw
+
+    def upload(self, path, attach_to_object_type=None,
+               attach_to_object_id=None):
+        """
+        https://developer.intuit.com/docs/api/accounting/attachable
+
+        https://developer.intuit.com/v2/apiexplorer?apiname=V3QBO#?id=Attachable
+
+        In theory you can attach to multiple objects, but you'd have to roll
+         your own for that use case.
+        """
+        url       = "{}/{}/upload".format(self.API_BASE_URL, self.cid)
+        loc, name = os.path.split(path)
+        #base, ext = name.rsplit(".", 1)
+        base, ext = os.path.splitext(name)
+        mime_type = MIME_TYPES.get(ext, "plain/text")
+        boundary  = "-------------PythonMultipartPost"
+        headers   = {
+            "Content-Type"    : "multipart/form-data; boundary={}".format(
+                boundary),
+            "Accept-Encoding" : "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+            "User-Agent"      : "OAuth gem v0.4.7",
+            "Accept"          : "application/json",
+            "Connection"      : "close"
+        }
+
+        with open(path, "rb") as handle:
+            binary_data = handle.read()
+
+        jd              = {
+            "ContentType" : mime_type,
+            "FileName"    : name,}
+
+        if attach_to_object_type and attach_to_object_id:
+            jd.update({
+                "AttachableRef" : [
+                    {"EntityRef" : {
+                        "type"  : attach_to_object_type,
+                        "value" : attach_to_object_id,},},],})
+        '''
+        request_body    = textwrap.dedent(
+            """
+            --{}
+            Content-Disposition: form-data; name="file_metadata_1";filename="{}"
+            Content-Type: application/json 
+            {}
+            --{}
+            Content-Disposition: form-data; name="file_content_1";filename="{}"
+            Content-Type: {}
+            Content-Length: {:d}
+            Content-Transfer-Encoding: binary
+            
+            {}
+            --{}--
+            """
+        ).format(boundary, "metadata.json", json.dumps(jd, indent=4),
+                 boundary, name, mime_type, len(binary_data), binary_data, 
+                 boundary)
+        '''
+        request_body    = textwrap.dedent(
+            """
+            --{}
+            Content-Disposition: form-data; name="file_content_1";filename="{}"
+            Content-Type: {}
+            Content-Length: {:d}
+            Content-Transfer-Encoding: binary
+            
+            {}
+            --{}--
+            """
+        ).format(boundary, name, mime_type, len(binary_data), binary_data, 
+                 boundary)
+
+        if isinstance(request_body, unicode):
+            request_body = request_body.encode("utf8")
+        
+        data = {
+            "headers"      : headers.copy(),
+            "request_body" : request_body
+        }
+        
+        return self._basic_call("POST", url, data=data)
+
+    def download(self, attachable_id, path):
+        """
+        https://developer.intuit.com/docs/api/accounting/attachable
+        """
+        '''
+        url    = "{}/{}/download/{}".format(
+            self.API_BASE_URL, self.cid, attachable_id)
+        link   = self._basic_call("GET", url)
+        '''
+        # Don't even bother with the above...just do a Read to get the link
+        #  in addition to important metadata that may be useful...
+        att       = self.read("Attachable", attachable_id)["Attachable"]
+        link      = att["TempDownloadUri"]
+        fn        = att["FileName"]
+        loc, name = os.path.split(path)
+
+        if not name:
+            name  = fn + ""
+        path      = os.path.join(loc, name)
+
+        handle    = open(path, "wb")
+        for chunk in requests.get(link).iter_-content(1024):
+            handle.write(chunk)
+
+        return link
+        
+        

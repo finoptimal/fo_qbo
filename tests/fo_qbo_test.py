@@ -38,6 +38,12 @@ parser.add_argument("-d", "--delete",
                     default=False,
                     help="Create and THEN delete a purchase object")
 
+parser.add_argument("-df", "--download_file",
+                    nargs=2,
+                    type=str,
+                    default=None,
+                    help="pass an Attachable Id and a destination path")
+
 parser.add_argument("-q", "--query",
                     type=str,
                     nargs="*",
@@ -60,6 +66,12 @@ parser.add_argument("-u", "--update",
                     type=str,
                     default=None,
                     help="toggles active/inactive for Account with this name")
+
+parser.add_argument("-uf", "--upload_file",
+                    nargs="*",
+                    type=str,
+                    default=None,
+                    help="pass a source path")
 
 parser.add_argument("-v", "--verbosity", 
                     type=int,
@@ -180,6 +192,25 @@ if __name__=='__main__':
                 "end_date"            : "2017-02-27"})
         
         print json.dumps(rp, indent=4)
+
+    if args.upload_file:
+        if not len(args.upload_file) > 1:
+            object_type = None
+            object_id   = None
+        else:
+            object_type = args.upload_file[1]
+            object_id   = args.upload_file[2]
+        result = sesh.upload(
+            args.upload_file[0],
+            attach_to_object_type=object_type,
+            attach_to_object_id=object_id)
+        
+        print json.dumps(result, indent=4)
+
+    if args.download_file:
+        result = sesh.download(*args.download_file)
+
+        print result
         
     end = time.time()
 
