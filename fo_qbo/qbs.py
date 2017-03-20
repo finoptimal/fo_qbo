@@ -348,11 +348,14 @@ class QBS(object):
         return raw
 
     def upload(self, path, attach_to_object_type=None,
-               attach_to_object_id=None):
+               attach_to_object_id=None, new_name=None):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
 
         https://developer.intuit.com/v2/apiexplorer?apiname=V3QBO#?id=Attachable
+
+        new_name is there in case you're uploading from one place, but you want
+         the file's name to come from somewhere else.
 
         In theory you can attach to multiple objects, but you'd have to roll
          your own for that use case.
@@ -382,7 +385,7 @@ class QBS(object):
 
         jd              = {
             "ContentType" : mime_type,
-            "FileName"    : name,}
+            "FileName"    : new_name if new_name else name,}
 
         if attach_to_object_type and attach_to_object_id:
             jd.update({
