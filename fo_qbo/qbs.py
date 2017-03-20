@@ -157,7 +157,7 @@ class QBS(object):
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
 
-        if self.vb > 5:
+        if self.vb > 7:
             print "The final URL (with params):"
             print response.url
             
@@ -169,7 +169,7 @@ class QBS(object):
             else:
                 return response.text
 
-        if self.vb > 3:
+        if self.vb > 7:
             try:
                 print json.dumps(response.json(), indent=4)
             except:
@@ -224,7 +224,7 @@ class QBS(object):
 
             all_objs      += objs
 
-            if self.vb > 4 and max_results > 0:
+            if self.vb > 7 and max_results > 0:
                 print "Queried {:20s} objects {:>4} through {:4>}.".format(
                     object_type, start_position,
                     start_position + max_results - 1)
@@ -311,7 +311,7 @@ class QBS(object):
             "changedSince" : utc_since,
             "entities"     : ",".join(object_types)}
 
-        if self.vb > 4:
+        if self.vb > 7:
             print "CDC Params:"
             print json.dumps(params, indent=4)
 
@@ -326,7 +326,7 @@ class QBS(object):
         url = "{}/{}/reports/{}".format(
             self.API_BASE_URL, self.cid, report_name)
 
-        if self.vb > 2:
+        if self.vb > 7:
             print json.dumps(params, indent=4)
                             
         raw = self._basic_call("GET", url, **{"params" : params})
@@ -341,7 +341,7 @@ class QBS(object):
             print "No Header item in raw (above)!?"
             raise Exception()
         
-        if self.vb > 2:
+        if self.vb > 7:
             print json.dumps(raw["Header"], indent=4)
             print '(raw["Header"] is above)'
 
