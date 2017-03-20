@@ -146,8 +146,9 @@ class QBS(object):
                     print data
             print "Above is the request body about to go here:"
             print url
-            print "Below are the call's params:"
+            print "Below are the call's params and then headers:"
             print json.dumps(params, indent=4)
+            print json.dumps(headers, indent=4)
             if self.vb > 15:
                 print "inspect request_type, url, headers, data, and params:" 
                 import ipdb;ipdb.set_trace()
@@ -355,6 +356,11 @@ class QBS(object):
 
         In theory you can attach to multiple objects, but you'd have to roll
          your own for that use case.
+
+        Note that, as of this writing, the API ignored the json part of the
+         request, but the upload does work. You simply have to do an Update
+         of the attachable to get the name right (which will be all lower-case)
+         and to achieve the attachment to one or more transaction entities.
         """
         url       = "{}/{}/upload".format(self.API_BASE_URL, self.cid)
         loc, name = os.path.split(path)
@@ -367,7 +373,7 @@ class QBS(object):
                 boundary),
             "Accept-Encoding" : "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
             "User-Agent"      : "OAuth gem v0.4.7",
-            "Accept"          : "application/json",
+            "accept"          : "application/json",
             "Connection"      : "close"
         }
 
@@ -404,6 +410,8 @@ class QBS(object):
                  boundary, name, mime_type, len(binary_data), binary_data, 
                  boundary)
         '''
+        # The above simply doesn't work as expected...hence the below
+        
         request_body    = textwrap.dedent(
             """
             --{}
@@ -426,8 +434,13 @@ class QBS(object):
             "request_body" : request_body
         }
         
-        return self._basic_call("POST", url, data=data)
+        upload_result  = self._basic_call("POST", url, data=data)
+        att            = upload_result[
+            "AttachableResponse"][0]["Attachable"].copy()
+        att.update(jd)
 
+        return self.update("Attachable", att)
+        
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
