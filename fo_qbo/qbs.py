@@ -10,6 +10,7 @@ Please contact developer@finoptimal.com with questions or comments.
 """
 
 from rauth       import OAuth1Session
+from base64      import b64encode
 import datetime, json, os, requests, textwrap, time
 
 from .qba        import QBAuth
@@ -381,7 +382,7 @@ class QBS(object):
         }
 
         with open(path, "rb") as handle:
-            binary_data = handle.read()
+            binary_data = b64encode(handle.read())
 
         jd              = {
             "ContentType" : mime_type,
@@ -393,6 +394,7 @@ class QBS(object):
                     {"EntityRef" : {
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},},],})
+
         '''
         request_body    = textwrap.dedent(
             """
@@ -404,7 +406,7 @@ class QBS(object):
             Content-Disposition: form-data; name="file_content_1";filename="{}"
             Content-Type: {}
             Content-Length: {:d}
-            Content-Transfer-Encoding: binary
+            Content-Transfer-Encoding: base64
             
             {}
             --{}--
@@ -421,14 +423,14 @@ class QBS(object):
             Content-Disposition: form-data; name="file_content_1";filename="{}"
             Content-Type: {}
             Content-Length: {:d}
-            Content-Transfer-Encoding: binary
+            Content-Transfer-Encoding: base64
             
             {}
             --{}--
             """
         ).format(boundary, name, mime_type, len(binary_data), binary_data, 
                  boundary)
-
+        
         if isinstance(request_body, unicode):
             request_body = request_body.encode("utf8")
         
@@ -438,12 +440,15 @@ class QBS(object):
         }
         
         upload_result  = self._basic_call("POST", url, data=data)
+
         att            = upload_result[
             "AttachableResponse"][0]["Attachable"].copy()
         att.update(jd)
 
+        #return upload_result
         return self.update("Attachable", att)
         
+    
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
