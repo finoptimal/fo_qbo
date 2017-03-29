@@ -110,7 +110,7 @@ class QBS(object):
             print "New access token et al for company id {}.".format(self.cid)
             print "Don't forget to store it!"
         
-    @retry(max_tries=7)
+    @retry(max_tries=0)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
@@ -373,12 +373,13 @@ class QBS(object):
         mime_type = MIME_TYPES.get(ext, "plain/text")
         boundary  = "-------------PythonMultipartPost"
         headers   = {
-            "Content-Type"    : "multipart/form-data; boundary={}".format(
+            "Content-Type"    : "multipart/form-data;boundary={}".format(
                 boundary),
-            "Accept-Encoding" : "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
-            "User-Agent"      : "OAuth gem v0.4.7",
             "accept"          : "application/json",
-            "Connection"      : "close"
+            "Connection"      : "close",
+            #"Accept-Encoding" : "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+            #"User-Agent"      : "OAuth gem v0.4.7",
+            "cache-control"   : "no-cache",
         }
 
         with open(path, "rb") as handle:
@@ -395,12 +396,12 @@ class QBS(object):
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},},],})
 
-        '''
         request_body    = textwrap.dedent(
             """
             --{}
             Content-Disposition: form-data; name="file_metadata_1";filename="{}"
-            Content-Type: application/json 
+            Content-Type: application/json
+ 
             {}
             --{}
             Content-Disposition: form-data; name="file_content_1";filename="{}"
@@ -411,24 +412,8 @@ class QBS(object):
             {}
             --{}--
             """
-        ).format(boundary, "metadata.json", json.dumps(jd, indent=4),
+        ).format(boundary, "metadata.json", json.dumps(jd, indent=0),
                  boundary, name, mime_type, len(binary_data), binary_data, 
-                 boundary)
-        '''
-        # The above simply doesn't work as expected...hence the below
-        
-        request_body    = textwrap.dedent(
-            """
-            --{}
-            Content-Disposition: form-data; name="file_content_1";filename="{}"
-            Content-Type: {}
-            Content-Length: {:d}
-            Content-Transfer-Encoding: base64
-            
-            {}
-            --{}--
-            """
-        ).format(boundary, name, mime_type, len(binary_data), binary_data, 
                  boundary)
         
         if isinstance(request_body, unicode):
@@ -439,16 +424,8 @@ class QBS(object):
             "request_body" : request_body
         }
         
-        upload_result  = self._basic_call("POST", url, data=data)
-
-        att            = upload_result[
-            "AttachableResponse"][0]["Attachable"].copy()
-        att.update(jd)
-
-        #return upload_result
-        return self.update("Attachable", att)
-        
-    
+        return self._basic_call("POST", url, data=data)
+                 
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
