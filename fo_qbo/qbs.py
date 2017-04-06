@@ -45,7 +45,7 @@ def retry(max_tries=10, delay_secs=0.2):
                     attempts += 1
                     if tries <= 0:
                         raise
-                    # slow down as failures accumulate in case it's transient
+                    # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
                     
         return inner
@@ -110,7 +110,7 @@ class QBS(object):
             print "New access token et al for company id {}.".format(self.cid)
             print "Don't forget to store it!"
         
-    @retry(max_tries=0)
+    @retry()
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
