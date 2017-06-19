@@ -11,7 +11,7 @@ Please contact developer@finoptimal.com with questions or comments.
 
 from rauth       import OAuth1Session
 from base64      import b64encode
-import datetime, json, os, requests, textwrap, time
+import datetime, json, os, requests, six, textwrap, time
 
 from .qba        import QBAuth
 from .mime_types import MIME_TYPES
@@ -44,6 +44,7 @@ def retry(max_tries=10, delay_secs=0.2):
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
+                        six.print_("Failing after {} tries!".format(attempts))
                         raise
                     # slow down as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
