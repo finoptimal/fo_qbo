@@ -371,7 +371,7 @@ class QBS(object):
         loc, name = os.path.split(path)
         #base, ext = name.rsplit(".", 1)
         base, ext = os.path.splitext(name)
-        mime_type = MIME_TYPES.get(ext, "plain/text")
+        mime_type = MIME_TYPES.get(ext.lower(), "plain/text")
         boundary  = "-------------PythonMultipartPost"
         headers   = {
             "Content-Type"    : "multipart/form-data;boundary={}".format(
