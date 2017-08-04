@@ -448,9 +448,11 @@ class QBS(object):
         path      = os.path.join(loc, name)
 
         handle    = open(path, "wb")
-        for chunk in requests.get(link).iter_-content(1024):
+        for chunk in requests.get(link).iter_content(1024):
             handle.write(chunk)
 
-        return link
+        handle.close()
+
+        return path # Because this may have changed if a directory was passed in
         
         
