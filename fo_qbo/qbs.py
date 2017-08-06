@@ -58,6 +58,7 @@ class QBS(object):
     """
     API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
+    ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
     def __init__(self, consumer_key, consumer_secret,
                  access_token=None, access_token_secret=None, company_id=None,
@@ -371,7 +372,7 @@ class QBS(object):
         loc, name = os.path.split(path)
         #base, ext = name.rsplit(".", 1)
         base, ext = os.path.splitext(name)
-        mime_type = MIME_TYPES.get(ext.lower(), "plain/text")
+        mime_type = self.ATTACHABLE_MIME_TYPES.get(ext.lower(), "plain/text")
         boundary  = "-------------PythonMultipartPost"
         headers   = {
             "Content-Type"    : "multipart/form-data;boundary={}".format(
