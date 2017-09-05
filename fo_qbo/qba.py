@@ -188,6 +188,10 @@ class QBAuth(object):
             raise Exception(
                 "Access token and access token secret are required!")
 
+        if self.vb < 1:
+            print "Troubleshoot reconnection!"
+            raise Exception("Rerun with verbosity > 0!")
+        
         try:
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
@@ -198,6 +202,8 @@ class QBAuth(object):
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
         except:
+            if self.vb > 1:
+                import ipdb;ipdb.set_trace()
             raise
 
         if resp.json()['ErrorCode'] > 0:
@@ -205,6 +211,8 @@ class QBAuth(object):
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
+        import ipdb;ipdb.set_trace()
+        
         access_token        = resp["oauth_token"]
         access_token_secret = resp["oauth_token_secret"]
 
