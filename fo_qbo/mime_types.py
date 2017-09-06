@@ -4,6 +4,7 @@ What MIME type should is uploaded file?
 
 MIME_TYPES = {
     ".ai"   : "application/postscript",
+    ".csv"  : "text/csv",
     ".doc"  : "application/msword",
     ".docx" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".eps"  : "application/postscript",
