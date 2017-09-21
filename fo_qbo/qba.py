@@ -183,21 +183,22 @@ class QBAuth(object):
         return False
     
     def _reconnect(self):
-
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
 
-        if self.vb < 1:
+        if self.vb < 5:
             print "Troubleshoot reconnection!"
             raise Exception("Rerun with verbosity > 0!")
+
+        print RECONNECT_URL
         
         try:
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
             resp      = qbSession.get(RECONNECT_URL,
-                    params = { 'format': 'json' })
+                    params = { 'format' : 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
@@ -219,7 +220,6 @@ class QBAuth(object):
         self._set_access_token(access_token, access_token_secret)
 
     def disconnect(self):
-
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")

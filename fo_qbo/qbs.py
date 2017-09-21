@@ -95,7 +95,8 @@ class QBS(object):
         """
         self.qba  = QBAuth(
             self.ck, self.cs, access_token=self.at,
-            access_token_secret=self.ats, expires_on=self.exo)
+            access_token_secret=self.ats, expires_on=self.exo,
+            verbosity=self.vb)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 
