@@ -183,45 +183,40 @@ class QBAuth(object):
         return False
     
     def _reconnect(self):
-
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
 
-        import ipdb;ipdb.set_trace()
-        
-        if self.vb < 10:
-            print "Troubleshoot reconnection!"
-            raise Exception("Rerun with verbosity > 0!")
+        raise Exception("Confirm reconnection works now!")
         
         try:
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
             resp      = qbSession.get(RECONNECT_URL,
-                    params = { 'format': 'json' })
+                    params = { 'format' : 'json' })
             if resp.status_code >= 400:
                 raise Exception("Request failed with status %s (%s)" % 
                                 (resp.status_code, resp.text))
         except:
+            import traceback;traceback.print_exc()
             if self.vb > 1:
                 import ipdb;ipdb.set_trace()
             raise
 
-        if resp.json()['ErrorCode'] > 0:
-            print json.dumps(resp.json(), indent=4)
-            raise Exception("Reconnect failed with code %s (%s)" %
-                (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
-
-        import ipdb;ipdb.set_trace()
+        rj = resp.json()
         
-        access_token        = resp["oauth_token"]
-        access_token_secret = resp["oauth_token_secret"]
+        if rj['ErrorCode'] > 0:
+            print json.dumps(rj, indent=4)
+            raise Exception("Reconnect failed with code %s (%s)" %
+                (rj['ErrorCode'], rj['ErrorMessage']))
+
+        access_token        = rj["OAuthToken"]
+        access_token_secret = rj["OAuthTokenSecret"]
 
         self._set_access_token(access_token, access_token_secret)
 
     def disconnect(self):
-
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")

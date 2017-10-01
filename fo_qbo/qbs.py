@@ -95,7 +95,8 @@ class QBS(object):
         """
         self.qba  = QBAuth(
             self.ck, self.cs, access_token=self.at,
-            access_token_secret=self.ats, expires_on=self.exo)
+            access_token_secret=self.ats, expires_on=self.exo,
+            verbosity=self.vb)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 
@@ -108,7 +109,7 @@ class QBS(object):
             
         self.sess = self.qba.session
 
-        if self.qba.new_token: # and self.vb > 0:
+        if self.qba.new_token and self.vb > 1:
             print "New access token et al for company id {}.".format(self.cid)
             print "Don't forget to store it!"
         
