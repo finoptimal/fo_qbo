@@ -188,7 +188,9 @@ class QBAuth(object):
             raise Exception(
                 "Access token and access token secret are required!")
 
-        if self.vb < 1:
+        import ipdb;ipdb.set_trace()
+        
+        if self.vb < 10:
             print "Troubleshoot reconnection!"
             raise Exception("Rerun with verbosity > 0!")
         
