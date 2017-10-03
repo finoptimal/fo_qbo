@@ -234,8 +234,11 @@ class QBS(object):
                     print "Failed query was:"
                     print query
                     if resp:
-                        print resp.text
-                        print resp.status_code
+                        if isinstance(resp, (str, dict, unicode)) and resp:
+                            print resp
+                        else:
+                            print resp.text
+                            print resp.status_code
                 raise Exception("Failed QBO Query")
 
             if count_only:
