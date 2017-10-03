@@ -44,6 +44,11 @@ parser.add_argument("-df", "--download_file",
                     default=None,
                     help="pass an Attachable Id and a destination path")
 
+parser.add_argument("-mv", "--minor_version", 
+                    type=str,
+                    default=None,
+                    help="For API tweaks (with potentially breaking changes)")
+
 parser.add_argument("-q", "--query",
                     type=str,
                     nargs="*",
@@ -86,7 +91,8 @@ if __name__=='__main__':
         args.consumer_creds[0], args.consumer_creds[1],
         access_token=args.access_token_creds[0],
         access_token_secret=args.access_token_creds[1],
-        company_id=args.company_id, verbosity=args.verbosity)
+        company_id=args.company_id, minor_version=args.minor_version,
+        verbosity=args.verbosity)
 
     if args.query:
         rd = sesh.query(*args.query)

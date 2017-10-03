@@ -62,7 +62,8 @@ class QBS(object):
 
     def __init__(self, consumer_key, consumer_secret,
                  access_token=None, access_token_secret=None, company_id=None,
-                 callback_url=None, expires_on=None, verbosity=0):
+                 callback_url=None, expires_on=None, minor_api_version=None,
+                 verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -80,10 +81,12 @@ class QBS(object):
         self.ats = access_token_secret
 
         self.cid = company_id
-        self.vb  = verbosity
 
         self.cbu = callback_url
         self.exo = expires_on
+
+        self.mav = minor_api_version
+        self.vb  = verbosity
         
         self._setup()
 
@@ -120,6 +123,16 @@ class QBS(object):
         """
         headers  = {"accept" : "application/json"}
 
+        """
+        if not "minorversion" in url and not self.mav is None:
+            url += "?minorversion={}".format(str(int(self.mav)))
+        """
+        if not "minorversion" in params.get("params", {}) and \
+           not self.mav is None:
+            if not "params" in params:
+                params["params"] = {}
+            params["params"]["minorversion"] = str(int(self.mav))
+
         if "download" in url:
             headers = {}
         
@@ -153,14 +166,20 @@ class QBS(object):
             print "Below are the call's params and then headers:"
             print json.dumps(params, indent=4)
             print json.dumps(headers, indent=4)
-            if self.vb > 15:
+            if self.vb > 19:
                 print "inspect request_type, url, headers, data, and params:" 
                 import ipdb;ipdb.set_trace()
-                
-        response = self.sess.request(
-            request_type.upper(), url, header_auth=True, realm=self.cid,
-            verify=True, headers=headers, data=data, **params)
 
+        try:
+            response = self.sess.request(
+                request_type.upper(), url, header_auth=True, realm=self.cid,
+                verify=True, headers=headers, data=data, **params)
+        except:
+            if self.vb > 14:
+                import traceback;traceback.print_exc()
+                import ipdb;ipdb.set_trace()
+            raise
+        
         if self.vb > 7:
             print "The final URL (with params):"
             print response.url
