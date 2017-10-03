@@ -186,8 +186,6 @@ class QBAuth(object):
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
-
-        raise Exception("Confirm reconnection works now!")
         
         try:
             qbSession = OAuth1Session(
@@ -205,7 +203,7 @@ class QBAuth(object):
             raise
 
         rj = resp.json()
-        
+
         if rj['ErrorCode'] > 0:
             print json.dumps(rj, indent=4)
             raise Exception("Reconnect failed with code %s (%s)" %
