@@ -15,6 +15,7 @@ MIME_TYPES = {
     ".pdf"  : "application/pdf",
     ".png"  : "image/png",
     ".rtf"  : "text/rtf",
+    ".tif"  : "image/tiff",
     ".tiff" : "image/tiff",
     ".txt"  : "text/plain",
     ".xls"  : "application/vnd.ms-excel",
