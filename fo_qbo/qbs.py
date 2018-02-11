@@ -104,7 +104,7 @@ class QBS(object):
         # To do: initiate and process token request if no self.at yet
 
         if not self.qba.session:
-            if self.vb > 0:
+            if self.vb > 1:
                 print "QBS has no working access token!"
                 if self.vb > 8:
                     print "Inspect self.qba, the QBAuth object:"
