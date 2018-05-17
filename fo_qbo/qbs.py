@@ -183,6 +183,9 @@ class QBS(object):
         if self.vb > 7:
             print "The final URL (with params):"
             print response.url
+            if self.vb > 15:
+                print "inspect response:"
+                import ipdb;ipdb.set_trace()
             
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
@@ -200,13 +203,16 @@ class QBS(object):
 
         raise Exception(response.text)
         
-    def query(self, object_type, where_tail=None, count_only=False):
+    def query(self, object_type, where_tail=None, count_only=False, **params):
         """
         where_tail example: WHERE Active IN (true,false) ... the syntax is
          SQLike and documented in Intuit's documentation.
 
         Handles pagination, because that's just no fun at all.
         """
+        if len(params) > 0:
+            raise NotImplementedError()
+
         queried_all = False
         
         select_what = "COUNT(*)" if count_only else "*"
@@ -263,7 +269,7 @@ class QBS(object):
 
         return all_objs
         
-    def create(self, object_type, object_dict):
+    def create(self, object_type, object_dict, **params):
         """
         The object type isn't actually included in the object_dict, which is
          why you also have to pass that in (first).
@@ -271,35 +277,43 @@ class QBS(object):
         url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
         
-        return self._basic_call("POST", url, data=object_dict)
+        return self._basic_call("POST", url, data=object_dict, **params)
         
-    def read(self, object_type, object_id):
+    def read(self, object_type, object_id, **params):
         """
         Just returns a single object, no questions asked.
         """
+        if len(params) > 0:
+            raise NotImplementedError()
         url = "{}/{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower(), object_id)
         
         return self._basic_call("GET", url)
         
-    def update(self, object_type, object_dict):
+    def update(self, object_type, object_dict, **params):
         """
         Unlike with the delete method, you really have to provide the update
          dict when making this call (otherwise the class won't know how you
          want to change the object in question).
         """
+        if len(params) > 0:
+            raise NotImplementedError()
+
         url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
 
         return self._basic_call("POST", url, data=object_dict)
 
-    def delete(self, object_type, object_id=None, object_dict=None):
+    def delete(self, object_type, object_id=None, object_dict=None, **params):
         """
         Either provide an object_dict (which will simply be handed to the API
          for deletion) or an object_id. If ONLY an object_id is passed in,
          the method does a read call to GET the object_dict, then performs
          the same as if an object_dict had been passed in
         """
+        if len(params) > 0:
+            raise NotImplementedError()
+
         url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
 
