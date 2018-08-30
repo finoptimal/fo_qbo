@@ -16,6 +16,8 @@ import datetime, json, os, requests, six, textwrap, time
 from .qba        import QBAuth
 from .mime_types import MIME_TYPES
 
+IMMEDIATELY_RAISABLE_ERRORS = {}
+
 def retry(max_tries=3, delay_secs=0.2):
     """
     Produces a decorator which tries effectively the function it decorates
@@ -40,7 +42,10 @@ def retry(max_tries=3, delay_secs=0.2):
                 try:
                     return retriable_function(*args, **kwargs)
                     break
-                except:
+                except Exception as exc:
+                    try:
+                        ejd = json.loads(exc.message)
+                        
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
