@@ -8,7 +8,10 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
+from __future__ import print_function
 
+from builtins import str
+from builtins import object
 from rauth       import OAuth1Session
 from base64      import b64encode
 import datetime, json, os, requests, six, textwrap, time
@@ -45,7 +48,11 @@ def retry(max_tries=3, delay_secs=0.2):
                 except Exception as exc:
                     try:
                         ejd = json.loads(exc.message)
-                        
+                        raise
+                    except:
+                        pass
+                    
+
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
@@ -110,16 +117,16 @@ class QBS(object):
 
         if not self.qba.session:
             if self.vb > 1:
-                print "QBS has no working access token!"
+                print("QBS has no working access token!")
                 if self.vb > 8:
-                    print "Inspect self.qba, the QBAuth object:"
+                    print("Inspect self.qba, the QBAuth object:")
                     import ipdb;ipdb.set_trace()
             
         self.sess = self.qba.session
 
         if self.qba.new_token and self.vb > 1:
-            print "New access token et al for company id {}.".format(self.cid)
-            print "Don't forget to store it!"
+            print("New access token et al for company id {}.".format(self.cid))
+            print("Don't forget to store it!")
         
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
@@ -157,22 +164,22 @@ class QBS(object):
 
         if self.vb > 7:
             if isinstance(data, dict) or not data:
-                print json.dumps(data, indent=4)
+                print(json.dumps(data, indent=4))
             else:
                 if len(data) > 1500:
-                    print "First 500 characters of data:"
-                    print data[:750]
-                    print "\n...\n"
-                    print data[-750:]
+                    print("First 500 characters of data:")
+                    print(data[:750])
+                    print("\n...\n")
+                    print(data[-750:])
                 else:
-                    print data
-            print "Above is the request body about to go here:"
-            print url
-            print "Below are the call's params and then headers:"
-            print json.dumps(params, indent=4)
-            print json.dumps(headers, indent=4)
+                    print(data)
+            print("Above is the request body about to go here:")
+            print(url)
+            print("Below are the call's params and then headers:")
+            print(json.dumps(params, indent=4))
+            print(json.dumps(headers, indent=4))
             if self.vb > 19:
-                print "inspect request_type, url, headers, data, and params:" 
+                print("inspect request_type, url, headers, data, and params:") 
                 import ipdb;ipdb.set_trace()
 
         try:
@@ -186,10 +193,10 @@ class QBS(object):
             raise
         
         if self.vb > 7:
-            print "The final URL (with params):"
-            print response.url
+            print("The final URL (with params):")
+            print(response.url)
             if self.vb > 15:
-                print "inspect response:"
+                print("inspect response:")
                 import ipdb;ipdb.set_trace()
             
         if response.status_code in [200]:
@@ -202,9 +209,9 @@ class QBS(object):
 
         if self.vb > 7:
             try:
-                print json.dumps(response.json(), indent=4)
+                print(json.dumps(response.json(), indent=4))
             except:
-                print response.text
+                print(response.text)
 
         raise Exception(response.text)
         
@@ -237,19 +244,19 @@ class QBS(object):
         base_len = len(query)
         while not queried_all:
             if self.vb > 7:
-                print query
+                print(query)
             resp = self._basic_call("POST", url, data=query)
 
             if not resp or not "QueryResponse" in resp:
                 if self.vb > 1:
-                    print "Failed query was:"
-                    print query
+                    print("Failed query was:")
+                    print(query)
                     if resp:
-                        if isinstance(resp, (str, dict, unicode)) and resp:
-                            print resp
+                        if isinstance(resp, (str, dict)) and resp:
+                            print(resp)
                         else:
-                            print resp.text
-                            print resp.status_code
+                            print(resp.text)
+                            print(resp.status_code)
                 raise Exception("Failed QBO Query")
 
             if count_only:
@@ -262,9 +269,9 @@ class QBS(object):
             all_objs      += objs
 
             if self.vb > 7 and max_results > 0:
-                print "Queried {:20s} objects {:>4} through {:4>}.".format(
+                print("Queried {:20s} objects {:>4} through {:4>}.".format(
                     object_type, start_position,
-                    start_position + max_results - 1)
+                    start_position + max_results - 1))
 
             if max_results < 1000:
                 queried_all = True
@@ -357,8 +364,8 @@ class QBS(object):
             "entities"     : ",".join(object_types)}
 
         if self.vb > 7:
-            print "CDC Params:"
-            print json.dumps(params, indent=4)
+            print("CDC Params:")
+            print(json.dumps(params, indent=4))
 
         # This will be a list of dictionaries, each of which relates to
         #  a specific response...
@@ -372,23 +379,23 @@ class QBS(object):
             self.API_BASE_URL, self.cid, report_name)
 
         if self.vb > 7:
-            print json.dumps(params, indent=4)
+            print(json.dumps(params, indent=4))
                             
         raw = self._basic_call("GET", url, **{"params" : params})
 
         if not raw:
-            print "No json-formatted {} {} report to start with. rp_params:".\
-                format(self.cid, report_name)
-            print json.dumps(params, indent=4)
+            print("No json-formatted {} {} report to start with. rp_params:".\
+                format(self.cid, report_name))
+            print(json.dumps(params, indent=4))
             raise Exception()
-        elif not "Header" in raw.keys():
-            print json.dumps(raw, indent=4)
-            print "No Header item in raw (above)!?"
+        elif not "Header" in list(raw.keys()):
+            print(json.dumps(raw, indent=4))
+            print("No Header item in raw (above)!?")
             raise Exception()
         
         if self.vb > 7:
-            print json.dumps(raw["Header"], indent=4)
-            print '(raw["Header"] is above)'
+            print(json.dumps(raw["Header"], indent=4))
+            print('(raw["Header"] is above)')
 
         return raw
 
@@ -463,7 +470,7 @@ class QBS(object):
                  boundary, name, mime_type, len(binary_data), binary_data, 
                  boundary)
         
-        if isinstance(request_body, unicode):
+        if isinstance(request_body, str):
             request_body = request_body.encode("utf8")
         
         data = {

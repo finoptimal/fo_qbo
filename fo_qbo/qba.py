@@ -1,5 +1,11 @@
+from __future__ import print_function
+from future import standard_library
+standard_library.install_aliases()
+from builtins import input
+from builtins import str
+from builtins import object
 from rauth import OAuth1Service, OAuth1Session
-from cStringIO import StringIO
+from io import StringIO
 import datetime, json, time
 
 # Intuit OAuth Service URLs
@@ -49,7 +55,7 @@ class QBAuth(object):
         """
         if not self.access_token or not self.access_token_secret:
             if self.vb > 1:
-                print "Need access_token and access_token_secret!"
+                print("Need access_token and access_token_secret!")
             return
         
         # Make sure the token isn't within the reconnect window. If it is,
@@ -69,12 +75,12 @@ class QBAuth(object):
         self.request_token, self.request_token_secret, self.authorize_url = \
                 self.get_authorize_url()
             
-        print "Please send the user here to authorize this app to access "
-        print " their QBO data:\n"
-        print self.authorize_url
+        print("Please send the user here to authorize this app to access ")
+        print(" their QBO data:\n")
+        print(self.authorize_url)
         authorized_callback_url = None
         while not authorized_callback_url:
-            authorized_callback_url = raw_input(
+            authorized_callback_url = input(
                 "\nPaste the entire callback URL back here (or ctrl-c):")
                 
         tail = authorized_callback_url.split("?")[1].strip()
@@ -85,7 +91,7 @@ class QBAuth(object):
             self.get_access_token_response(
                 params['oauth_token'], params['oauth_verifier'])
         self.company_id                   = params["realmId"]
-        print "This company's (realm) ID: {}".format(self.company_id)
+        print("This company's (realm) ID: {}".format(self.company_id))
 
         self._set_access_token(access_token, access_token_secret)
             
@@ -94,7 +100,7 @@ class QBAuth(object):
         self.access_token        = access_token
         self.access_token_secret = access_token_secret
         if self.vb > 1:
-            print "New access token and secret set. Store these things!"
+            print("New access token and secret set. Store these things!")
         self.new_token           = True
         self.expires_on          = str(
             datetime.datetime.now().date() + datetime.timedelta(days=180))
@@ -168,7 +174,7 @@ class QBAuth(object):
         Figure out if we're inside the 30 day window preceding the expiration
          date of this access token, returning True if so
         """
-        if not isinstance(self.expires_on, (str, unicode)):
+        if not isinstance(self.expires_on, str):
             #standardize; a string is how the date will likely
             #  be stored (in a json file at least)
             if isinstance(self.expires_on, datetime.datetime):
@@ -205,7 +211,7 @@ class QBAuth(object):
         rj = resp.json()
 
         if rj['ErrorCode'] > 0:
-            print json.dumps(rj, indent=4)
+            print(json.dumps(rj, indent=4))
             raise Exception("Reconnect failed with code %s (%s)" %
                 (rj['ErrorCode'], rj['ErrorMessage']))
 
@@ -232,6 +238,6 @@ class QBAuth(object):
             raise
 
         if resp.json()['ErrorCode'] > 0:
-            print jsond.dumps(resp.json(), indent=4)
+            print(jsond.dumps(resp.json(), indent=4))
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
