@@ -147,7 +147,9 @@ class QBS(object):
 
         if "download" in url:
             headers = {}
-        
+        elif "/pdf" == url[-4:]:
+            headers = {"content-type" : "application/pdf"}
+            
         if request_type.lower() in ["post"]:
             if isinstance(data, dict):
                 if "headers" in data:
@@ -204,6 +206,8 @@ class QBS(object):
                 rj = response.json()
                 self.last_call_time = rj.get("time")
                 return rj
+            elif headers.get("content-type") == "application/pdf":
+                return response
             else:
                 return response.text
 
@@ -510,4 +514,18 @@ class QBS(object):
 
         return path # Because this may have changed if a directory was passed in
         
-        
+    def get_pdf(self, object_type, object_id, path):
+        link   = "{}/{}/{}/{}/pdf".format(
+            self.API_BASE_URL, self.cid, object_type.lower(), object_id)
+
+        if self.vb > 4:
+            print("Downloading {} {} from {}...".format(
+                object_type, object_id, link))
+
+        with open(path, "wb") as handle:
+            for chunk in self._basic_call("GET", link).iter_content(1024):
+                handle.write(chunk)
+
+            handle.close()
+
+        return link
