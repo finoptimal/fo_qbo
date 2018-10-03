@@ -400,7 +400,8 @@ class QBS(object):
         return raw
 
     def upload(self, path, attach_to_object_type=None,
-               attach_to_object_id=None, new_name=None):
+               attach_to_object_id=None, new_name=None,
+               include_on_send=False):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
 
@@ -448,7 +449,8 @@ class QBS(object):
                 "AttachableRef" : [
                     {"EntityRef" : {
                         "type"  : attach_to_object_type,
-                        "value" : attach_to_object_id,},},],})
+                        "value" : attach_to_object_id,},
+                     "IncludeOnSend" : include_on_send},],})
 
         request_body    = textwrap.dedent(
             """
