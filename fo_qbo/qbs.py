@@ -151,11 +151,14 @@ class QBS(object):
             headers = {"content-type" : "application/pdf"}
             
         if request_type.lower() in ["post"]:
-            if isinstance(data, dict):
+            if url[-4:] == "send":
+                headers.update({"Content-Type" : "application/octet-stream"})
+                
+            elif isinstance(data, dict):
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
-                    data    = data["request_body"] + ""    # should text 
+                    data    = data["request_body"] + ""    # should be text 
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
@@ -515,6 +518,7 @@ class QBS(object):
         return path # Because this may have changed if a directory was passed in
         
     def get_pdf(self, object_type, object_id, path):
+        """https://developer.intuit.com/docs/api/accounting/invoice"""
         link   = "{}/{}/{}/{}/pdf".format(
             self.API_BASE_URL, self.cid, object_type.lower(), object_id)
 
@@ -529,3 +533,15 @@ class QBS(object):
             handle.close()
 
         return link
+
+    def send(self, object_type, object_id, recipient):
+        """https://developer.intuit.com/docs/api/accounting/invoice"""
+        url   = "{}/{}/{}/{}/send".format(
+            self.API_BASE_URL, self.cid, object_type.lower(), object_id)
+
+        if self.vb > 4:
+            print("Emailing {} {} to {}...".format(
+                object_type, object_id, recipient))
+
+        return self._basic_call(
+            "POST", url, **{"params" : {"params" : {"sendTo" : recipient}}})
