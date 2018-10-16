@@ -275,7 +275,7 @@ class QBS(object):
 
             all_objs      += objs
 
-            if self.vb > 7 and max_results > 0:
+            if self.vb > 6 and max_results > 0:
                 print("Queried {:20s} objects {:>4} through {:4>}.".format(
                     object_type, start_position,
                     start_position + max_results - 1))
