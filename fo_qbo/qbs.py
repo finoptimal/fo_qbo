@@ -8,13 +8,14 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
-from __future__ import print_function
+from __future__  import print_function
 
-from builtins import str
-from builtins import object
+from builtins    import str
+from builtins    import object
 from rauth       import OAuth1Session
 from base64      import b64encode
-import datetime, json, os, requests, six, textwrap, time
+
+import datetime, json, os, requests, six, textwrap, time, traceback
 
 from .qba        import QBAuth
 from .mime_types import MIME_TYPES
@@ -46,13 +47,6 @@ def retry(max_tries=3, delay_secs=0.2):
                     return retriable_function(*args, **kwargs)
                     break
                 except Exception as exc:
-                    try:
-                        ejd = json.loads(exc.message)
-                        raise
-                    except:
-                        pass
-                    
-
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
@@ -165,7 +159,6 @@ class QBS(object):
             else:
                 # (basically for queries only)
                 headers["Content-Type"] = "application/text"
-                #headers["Content-Type"] = "text/plain"
 
         if self.vb > 7:
             if isinstance(data, dict) or not data:
@@ -187,15 +180,10 @@ class QBS(object):
                 print("inspect request_type, url, headers, data, and params:") 
                 import ipdb;ipdb.set_trace()
 
-        try:
-            response = self.sess.request(
-                request_type.upper(), url, header_auth=True, realm=self.cid,
-                verify=True, headers=headers, data=data, **params)
-        except:
-            if self.vb > 14:
-                import traceback;traceback.print_exc()
-                import ipdb;ipdb.set_trace()
-            raise
+
+        response = self.sess.request(
+            request_type.upper(), url, header_auth=True, realm=self.cid,
+            verify=True, headers=headers, data=data, **params)
         
         if self.vb > 7:
             print("The final URL (with params):")
@@ -214,13 +202,12 @@ class QBS(object):
             else:
                 return response.text
 
-        if self.vb > 7:
-            try:
-                print(json.dumps(response.json(), indent=4))
-            except:
-                print(response.text)
+        try:
+            error_message = response.json()
+        except:
+            error_message = response.text
 
-        raise Exception(response.text)
+        raise Exception(error_message)
         
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
