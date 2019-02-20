@@ -5,6 +5,7 @@ from builtins import input
 from builtins import str
 from builtins import object
 from rauth import OAuth1Service, OAuth1Session
+from intuitlib.client import AuthClient
 from io import StringIO
 import datetime, json, time
 
@@ -22,7 +23,7 @@ RENEW_WINDOW_DAYS = 30
 
 class QBAuth(object):
     """
-    If you pass in all of the first five arguments,  
+    If you pass in all of the first five arguments,
     """
     def __init__(self, consumer_key, consumer_secret, access_token=None,
                  access_token_secret=None, expires_on=None, callback_url=None,
@@ -42,8 +43,8 @@ class QBAuth(object):
         self.vb                  = verbosity
 
         # lets instantiator know to store new persistent data (if applicable)
-        self.new_token           = False     
-        
+        self.new_token           = False
+
         self.session = None  # until setup is complete
 
         self._setup()
@@ -57,12 +58,12 @@ class QBAuth(object):
             if self.vb > 1:
                 print("Need access_token and access_token_secret!")
             return
-        
+
         # Make sure the token isn't within the reconnect window. If it is,
         #  reconnect, otherwise, do nothing else.
         if self.expires_on and self.time_to_renew:
             return self._reconnect()
-                
+
         self.session = OAuth1Session(
             self.consumer_key, self.consumer_secret, self.access_token,
             self.access_token_secret)
@@ -74,7 +75,7 @@ class QBAuth(object):
         """
         self.request_token, self.request_token_secret, self.authorize_url = \
                 self.get_authorize_url()
-            
+
         print("Please send the user here to authorize this app to access ")
         print(" their QBO data:\n")
         print(self.authorize_url)
@@ -82,7 +83,7 @@ class QBAuth(object):
         while not authorized_callback_url:
             authorized_callback_url = input(
                 "\nPaste the entire callback URL back here (or ctrl-c):")
-                
+
         tail = authorized_callback_url.split("?")[1].strip()
 
         params = dict([ tuple(param.split("=")) for param in tail.split("&") ])
@@ -94,7 +95,7 @@ class QBAuth(object):
         print("This company's (realm) ID: {}".format(self.company_id))
 
         self._set_access_token(access_token, access_token_secret)
-            
+
     def _set_access_token(self, access_token, access_token_secret):
         # In case of access token retrieval after authorization or reconnect
         self.access_token        = access_token
@@ -130,7 +131,7 @@ class QBAuth(object):
             #  access_token_secret
             request_token, request_token_secret = \
                 qbService.get_request_token(params = { 'oauth_callback' : cbu })
-        
+
             # User should be redirected here to authorize
             # Access token will be sent to callback url to be processed
             #  by rest of workflow
@@ -152,7 +153,7 @@ class QBAuth(object):
         if self.request_token is None or self.request_token_secret is None:
             raise Exception("Request token and secret required for " \
                     "access token retrieval")
-        
+
         qbService = OAuth1Service(
             name="quickbooks-wrapper",
             consumer_key=self.consumer_key,
@@ -161,9 +162,9 @@ class QBAuth(object):
             base_url=None)
 
         access_token, access_token_secret = \
-            qbService.get_access_token(self.request_token, 
+            qbService.get_access_token(self.request_token,
                                        self.request_token_secret,
-                                       params = { 'oauth_token': oauth_token, 
+                                       params = { 'oauth_token': oauth_token,
                                            'oauth_verifier': oauth_verifier })
 
         return access_token, access_token_secret
@@ -187,12 +188,12 @@ class QBAuth(object):
             return True
 
         return False
-    
+
     def _reconnect(self):
         if self.access_token is None or self.access_token_secret is None:
             raise Exception(
                 "Access token and access token secret are required!")
-        
+
         try:
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
@@ -200,7 +201,7 @@ class QBAuth(object):
             resp      = qbSession.get(RECONNECT_URL,
                     params = { 'format' : 'json' })
             if resp.status_code >= 400:
-                raise Exception("Request failed with status %s (%s)" % 
+                raise Exception("Request failed with status %s (%s)" %
                                 (resp.status_code, resp.text))
         except:
             import traceback;traceback.print_exc()
@@ -229,10 +230,10 @@ class QBAuth(object):
             qbSession = OAuth1Session(
                     self.consumer_key, self.consumer_secret,
                     self.access_token, self.access_token_secret)
-            resp      = qbSession.get(DISCONNECT_URL, 
+            resp      = qbSession.get(DISCONNECT_URL,
                     params = { 'format': 'json' })
             if resp.status_code >= 400:
-                raise Exception("Request failed with status %s (%s)" % 
+                raise Exception("Request failed with status %s (%s)" %
                                 (resp.status_code, resp.text))
         except:
             raise
@@ -241,3 +242,28 @@ class QBAuth(object):
             print(jsond.dumps(resp.json(), indent=4))
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
+
+class QBAuth2():
+    def __init__(self, client_id, client_secret, production=False):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.production = production
+        self.redirect_uri = 'https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl'
+
+        if production:
+            self.environment = 'production'
+        else:
+            self.environment = 'sandbox'
+
+        # save all parameters in self
+        self.session = None
+        self._setup()
+
+    def _setup(self):
+        if client_id is not None and self.client_secret is not None:
+            self.session = AuthClient(
+                self.client_id,
+                self.client_secret,
+                self.redirect_uri,
+                self.environment,
+            )

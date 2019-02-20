@@ -1,5 +1,5 @@
 """
-Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as 
+Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as
  xml, but this wrapper ONLY supports json-formatted messages.
 
 https://developer.intuit.com/docs/api/accounting
@@ -41,7 +41,7 @@ def retry(max_tries=3, delay_secs=0.2):
             delay  = kwargs.get("delay", delay_secs)
 
             attempts = 0
-            
+
             while True:
                 try:
                     return retriable_function(*args, **kwargs)
@@ -54,7 +54,7 @@ def retry(max_tries=3, delay_secs=0.2):
                         raise
                     # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
-                    
+
         return inner
     return decorator
 
@@ -93,7 +93,7 @@ class QBS(object):
 
         self.mav = minor_api_version
         self.vb  = verbosity
-        
+
         self._setup()
 
     def _setup(self):
@@ -115,13 +115,13 @@ class QBS(object):
                 if self.vb > 8:
                     print("Inspect self.qba, the QBAuth object:")
                     import ipdb;ipdb.set_trace()
-            
+
         self.sess = self.qba.session
 
         if self.qba.new_token and self.vb > 1:
             print("New access token et al for company id {}.".format(self.cid))
             print("Don't forget to store it!")
-        
+
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
         """
@@ -143,16 +143,16 @@ class QBS(object):
             headers = {}
         elif "/pdf" == url[-4:]:
             headers = {"content-type" : "application/pdf"}
-            
+
         if request_type.lower() in ["post"]:
             if url[-4:] == "send":
                 headers.update({"Content-Type" : "application/octet-stream"})
-                
+
             elif isinstance(data, dict):
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
-                    data    = data["request_body"] + ""    # should be text 
+                    data    = data["request_body"] + ""    # should be text
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
@@ -177,21 +177,21 @@ class QBS(object):
             print(json.dumps(params, indent=4))
             print(json.dumps(headers, indent=4))
             if self.vb > 19:
-                print("inspect request_type, url, headers, data, and params:") 
+                print("inspect request_type, url, headers, data, and params:")
                 import ipdb;ipdb.set_trace()
 
 
         response = self.sess.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
-        
+
         if self.vb > 7:
             print("The final URL (with params):")
             print(response.url)
             if self.vb > 15:
                 print("inspect response:")
                 import ipdb;ipdb.set_trace()
-            
+
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
                 rj = response.json()
@@ -208,7 +208,7 @@ class QBS(object):
             error_message = response.text
 
         raise Exception(error_message)
-        
+
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
         where_tail example: WHERE Active IN (true,false) ... the syntax is
@@ -220,7 +220,7 @@ class QBS(object):
             raise NotImplementedError()
 
         queried_all = False
-        
+
         select_what = "COUNT(*)" if count_only else "*"
         if where_tail:
             where_tail = " " + where_tail
@@ -234,7 +234,7 @@ class QBS(object):
 
         if object_type in self.UNQUERIABLE_OBJECT_TYPES:
             raise Exception("Can't query QB {} objects!".format(object_type))
-        
+
         base_len = len(query)
         while not queried_all:
             if self.vb > 7:
@@ -255,7 +255,7 @@ class QBS(object):
 
             if count_only:
                 return resp["QueryResponse"]["totalCount"]
-            
+
             objs           = resp["QueryResponse"].get(object_type, [])
             start_position = resp["QueryResponse"].get("startPosition", 0)
             max_results    = resp["QueryResponse"].get("maxResults", 0)
@@ -274,7 +274,7 @@ class QBS(object):
                 start_position + 1000)
 
         return all_objs
-        
+
     def create(self, object_type, object_dict, **params):
         """
         The object type isn't actually included in the object_dict, which is
@@ -282,9 +282,9 @@ class QBS(object):
         """
         url = "{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower())
-        
+
         return self._basic_call("POST", url, data=object_dict, **params)
-        
+
     def read(self, object_type, object_id, **params):
         """
         Just returns a single object, no questions asked.
@@ -293,9 +293,9 @@ class QBS(object):
             raise NotImplementedError()
         url = "{}/{}/{}/{}".format(
             self.API_BASE_URL, self.cid, object_type.lower(), object_id)
-        
+
         return self._basic_call("GET", url)
-        
+
     def update(self, object_type, object_dict, **params):
         """
         Unlike with the delete method, you really have to provide the update
@@ -330,7 +330,7 @@ class QBS(object):
         skinny_dict = {
             "Id"        : object_dict["Id"],
             "SyncToken" : object_dict["SyncToken"]}
-        
+
         return self._basic_call(
             "POST", url, data=skinny_dict, params={"operation" : "delete"})
 
@@ -340,17 +340,17 @@ class QBS(object):
 
         Note that this only gets you changes from the last 30 days
 
-        object_types should be a list, e.g. 
+        object_types should be a list, e.g.
          ["Purchase", "JournalEntry", "Vendor"]
 
         Watch out for the deletion bug on JournalEntry...it won't tell you about
-         deleted JournalEntry objects! QBO-94274 is the bug number (though it's 
+         deleted JournalEntry objects! QBO-94274 is the bug number (though it's
          not listed in the API documentation's known issues).
         """
-        url = "{}/{}/cdc".format(self.API_BASE_URL, self.cid) 
-        
+        url = "{}/{}/cdc".format(self.API_BASE_URL, self.cid)
+
         if isinstance(utc_since, datetime.datetime):
-            # Either pass in a UTC datetime or a string formatted like this: 
+            # Either pass in a UTC datetime or a string formatted like this:
             utc_since = utc_since.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
         params = {
@@ -374,7 +374,7 @@ class QBS(object):
 
         if self.vb > 7:
             print(json.dumps(params, indent=4))
-                            
+
         raw = self._basic_call("GET", url, **{"params" : params})
 
         if not raw:
@@ -386,7 +386,7 @@ class QBS(object):
             print(json.dumps(raw, indent=4))
             print("No Header item in raw (above)!?")
             raise Exception()
-        
+
         if self.vb > 7:
             print(json.dumps(raw["Header"], indent=4))
             print('(raw["Header"] is above)')
@@ -451,31 +451,31 @@ class QBS(object):
             --{}
             Content-Disposition: form-data; name="file_metadata_1";filename="{}"
             Content-Type: application/json
- 
+
             {}
             --{}
             Content-Disposition: form-data; name="file_content_1";filename="{}"
             Content-Type: {}
             Content-Length: {:d}
             Content-Transfer-Encoding: base64
-            
+
             {}
             --{}--
             """
         ).format(boundary, "metadata.json", json.dumps(jd, indent=0),
-                 boundary, name, mime_type, len(binary_data), binary_data, 
+                 boundary, name, mime_type, len(binary_data), binary_data,
                  boundary)
-        
+
         if isinstance(request_body, str):
             request_body = request_body.encode("utf8")
-        
+
         data = {
             "headers"      : headers.copy(),
             "request_body" : request_body
         }
-        
+
         return self._basic_call("POST", url, data=data)
-                 
+
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
@@ -503,7 +503,7 @@ class QBS(object):
         handle.close()
 
         return path # Because this may have changed if a directory was passed in
-        
+
     def get_pdf(self, object_type, object_id, path):
         """https://developer.intuit.com/docs/api/accounting/invoice"""
         link   = "{}/{}/{}/{}/pdf".format(

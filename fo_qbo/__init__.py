@@ -1,1 +1,1 @@
-from qbs import *
+from .qbs import *
