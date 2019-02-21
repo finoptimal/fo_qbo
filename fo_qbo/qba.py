@@ -6,8 +6,11 @@ from builtins import str
 from builtins import object
 from rauth import OAuth1Service, OAuth1Session
 from intuitlib.client import AuthClient
+from intuitlib.enums import Scopes
 from io import StringIO
 import datetime, json, time
+from urllib.parse import urlparse, parse_qs
+import requests
 
 # Intuit OAuth Service URLs
 REQUEST_TOKEN_URL = "https://oauth.intuit.com/oauth/v1/get_request_token"
@@ -260,10 +263,65 @@ class QBAuth2():
         self._setup()
 
     def _setup(self):
-        if client_id is not None and self.client_secret is not None:
+        if self.client_id is not None and self.client_secret is not None:
             self.session = AuthClient(
                 self.client_id,
                 self.client_secret,
                 self.redirect_uri,
                 self.environment,
             )
+
+    # the following functions correspond to those in the Intuit OAuth client
+    # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app
+    def get_authorize_url(self):
+        # TODO: implement out-of-bounds authorization
+        url = self.session.get_authorization_url([Scopes.ACCOUNTING])
+        return url
+
+    def get_tokens_and_expiry(self, auth_code):
+        self.session.get_bearer_token(auth_code)
+
+    def oob(self, callback_url=CALLBACK_URL):
+        """
+        Out of Band solution adapted from QBAuth.
+        """
+        self.authorize_url = self.get_authorize_url()
+
+        print("Please send the user here to authorize this app to access ")
+        print(" their QBO data:\n")
+        print(self.authorize_url)
+        authorized_callback_url = None
+        while not authorized_callback_url:
+            authorized_callback_url = input(
+                "\nPaste the entire callback URL back here (or ctrl-c):")
+        self.handle_authorized_callback_url(url)
+
+    def handle_authorized_callback_url(self, url):
+        tail = url.split("?")[1].strip()
+        params = dict([ tuple(param.split("=")) for param in tail.split("&") ])
+        print(params)
+        self.get_tokens_and_expiry(params['code'])
+        # access_token, access_token_secret = \
+        #     self.get_access_token_response(
+        #         params['oauth_token'], params['oauth_verifier'])
+        self.company_id                   = params["realmId"]
+        print("This company's (realm) ID: {}".format(self.company_id))
+
+        self._set_access_token(self.session.access_token)
+
+    def get_access_token_response(oauth_token, oauth_verifier):
+        return None,None
+
+    def _set_access_token(self, access_token):
+        self.access_token = access_token
+
+    def sample_call(self):
+        base_url = 'https://sandbox-quickbooks.api.intuit.com'
+        url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, self.company_id)
+        auth_header = 'Bearer {0}'.format(self.access_token)
+        headers = {
+            'Authorization': auth_header,
+            'Accept': 'application/json'
+        }
+        response = requests.get(url, headers=headers)
+        print(response.json())
