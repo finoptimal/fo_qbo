@@ -246,12 +246,22 @@ class QBAuth(object):
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
+    def request(self, request_type, url, header_auth=True, realm='', verify=True,
+                headers='', data='', **params):
+        return self.session.request(
+            request_type.upper(), url, header_auth=True, realm=self.cid,
+            verify=True, headers=headers, data=data, **params)
+
 class QBAuth2():
-    def __init__(self, client_id, client_secret, production=False):
+    def __init__(self, client_id, client_secret, production=False,
+                 refresh_token=None, access_token=None, realm_id=None):
         self.client_id = client_id
         self.client_secret = client_secret
         self.production = production
         self.redirect_uri = 'https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl'
+        self.refresh_token = refresh_token
+        self.access_token = access_token
+        self.realm_id = realm_id
 
         if production:
             self.environment = 'production'
@@ -260,15 +270,18 @@ class QBAuth2():
 
         # save all parameters in self
         self.session = None
-        self._setup()
+        self._setup(refresh_token=refresh_token, access_token=access_token, realm_id=realm_id)
 
-    def _setup(self):
+    def _setup(self, refresh_token=None, access_token=None, realm_id=None):
         if self.client_id is not None and self.client_secret is not None:
             self.session = AuthClient(
                 self.client_id,
                 self.client_secret,
                 self.redirect_uri,
                 self.environment,
+                refresh_token=self.refresh_token,
+                access_token=self.access_token,
+                realm_id=self.realm_id,
             )
 
     # the following functions correspond to those in the Intuit OAuth client
@@ -299,29 +312,25 @@ class QBAuth2():
     def handle_authorized_callback_url(self, url):
         tail = url.split("?")[1].strip()
         params = dict([ tuple(param.split("=")) for param in tail.split("&") ])
-        print(params)
         self.get_tokens_and_expiry(params['code'])
-        # access_token, access_token_secret = \
-        #     self.get_access_token_response(
-        #         params['oauth_token'], params['oauth_verifier'])
-        self.company_id                   = params["realmId"]
-        print("This company's (realm) ID: {}".format(self.company_id))
+        self.realm_id                   = params["realmId"]
+        print("This company's (realm) ID: {}".format(self.realm_id))
 
-        self._set_access_token(self.session.access_token)
-
-    def get_access_token_response(oauth_token, oauth_verifier):
-        return None,None
+        self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
 
     def _set_access_token(self, access_token):
-        self.access_token = access_token
+        print("todo: write this to JSON?")
 
-    def sample_call(self):
+    def refresh(self):
+        self.session.refresh()
+
+    def request(self):
         base_url = 'https://sandbox-quickbooks.api.intuit.com'
-        url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, self.company_id)
-        auth_header = 'Bearer {0}'.format(self.access_token)
+        url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, self.session.realm_id)
+        auth_header = 'Bearer {0}'.format(self.session.access_token)
         headers = {
             'Authorization': auth_header,
             'Accept': 'application/json'
         }
         response = requests.get(url, headers=headers)
-        print(response.json())
+        return response

@@ -1,5 +1,6 @@
 import unittest
 from fo_qbo.qba import QBAuth, QBAuth2
+from fo_qbo.qbs import QBS
 
 class TestQBAuthSetup(unittest.TestCase):
     def test_init(self):
@@ -12,7 +13,9 @@ class TestQBAuthSetup(unittest.TestCase):
 client_secret = 'zHThPl1sWXBjNU3Qt3zpbgqjGMAoMzxEExOfxRK2'
 client_id = 'Q0sdekF9eJZd1KOyowv5RfVlNxqt00HqyXF5O0MRDEqvtQa5Ca'
 # gotten from one-time browser permission per project, scope: accounting
-auth_code = 'L011550699860jDAzhROoFFDxGgyREF6Jf9sjmrxD1pgrS9rZY'
+refresh_token = 'Q011559851403hKb1KIYhxZWhnpgGrJsVGbtpBVj7RGSbqitTV'
+realm_id = '123146326724784'
+access_token = None
 
 class TestQBAuth2Setup(unittest.TestCase):
     def test_init(self):
@@ -32,30 +35,35 @@ class TestQBAuth2Setup(unittest.TestCase):
         qba = QBAuth2(client_id, client_secret)
         self.assertIsNone(qba.session.access_token)
         self.assertIsNone(qba.session.refresh_token)
-        qba.get_tokens_and_expiry(auth_code)
-        self.assertIsNotNone(qba.session.access_token)
+        qba = QBAuth2(client_id, client_secret, refresh_token=refresh_token, realm_id=realm_id, access_token=access_token)
         self.assertIsNotNone(qba.session.refresh_token)
 
-    # def test_sample_api_call(self):
-    #     qba = QBAuth2(client_id, client_secret)
-    #     qba.get_tokens_and_expiry(auth_code)
-    #
-    #     base_url = 'https://sandbox-quickbooks.api.intuit.com'
-    #     url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, qba.session.realm_id)
-    #     auth_header = 'Bearer {0}'.format(qba.session.access_token)
-    #     headers = {
-    #         'Authorization': auth_header,
-    #         'Accept': 'application/json'
-    #     }
-    #     response = requests.get(url, headers=headers)
-    #     self.assertEqual(response.status, 200)
+    def test_api_call(self):
+        qba = QBAuth2(client_id, client_secret, refresh_token=refresh_token, realm_id=realm_id, access_token=access_token)
+        r = qba.request()
+        self.assertEqual(r.status_code, 401)
+        qba.refresh()
+        r = qba.request()
+        self.assertEqual(r.status_code, 200)
+
+class TestQBS(unittest.TestCase):
+    def test_init(self):
+        self.assertRaises(ValueError, QBS)
+        qbs = QBS(client_id=client_id, client_secret=client_secret,
+                  refresh_token=refresh_token, company_id=realm_id, verbosity=0)
+        self.assertIsNotNone(qbs.qba)
+
+    def test_api_call(self):
+        qbs = QBS(client_id=client_id, client_secret=client_secret,
+                  refresh_token=refresh_token, company_id=realm_id, verbosity=0)
+        
 
 if __name__ == "__main__":
-    # tester = TestQBAuth2Setup()
-    # tester.test_app_connection()
-    tester = QBAuth2(client_id, client_secret)
-    url = tester.get_authorize_url()
-    print(url)
-    url = input('paste the callback URL:')
-    tester.handle_authorized_callback_url(url)
-    tester.sample_call()
+    qba = QBAuth2(client_id, client_secret, refresh_token=refresh_token, realm_id=realm_id, access_token=access_token)
+    r = qba.request()
+    print(qba.session.access_token)
+    print(r.status_code)
+    qba.refresh()
+    print(qba.session.access_token)
+    r = qba.request()
+    print(r.status_code)

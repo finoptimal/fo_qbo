@@ -66,7 +66,8 @@ class QBS(object):
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
-    def __init__(self, consumer_key, consumer_secret,
+    def __init__(self, consumer_key=None, consumer_secret=None,           #oauth 1
+                 client_id=None, client_secret=None, refresh_token=None, #oauth 2
                  access_token=None, access_token_secret=None, company_id=None,
                  callback_url=None, expires_on=None, minor_api_version=None,
                  verbosity=0):
@@ -76,12 +77,30 @@ class QBS(object):
 
         It only works with a single company_id at a time.
 
+        If using OAuth 1, you must pass in a consumer_key and consumer_secret,
+        and access token + secret to bypass OOB authentication.
+
+        If using OAuth 2, you must pass in a client_id and client_secret, or
+        a refresh_token to bypass OOB authentication.
+
         connector_callback and reconnector_callback are what happens when
          we first connect or when we reconnect, getting a new access token
          in either case.
         """
+        if consumer_key is not None and consumer_secret is not None:
+            self.oauth_version = 1
+        elif (client_id is not None and client_secret is not None) or \
+                (refresh_token is not None and company_id is not None):
+            self.oauth_version = 2
+        else:
+            raise ValueError("Could not create connection to QB API, not enough credentials")
+
         self.ck  = consumer_key
         self.cs  = consumer_secret
+
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.refresh_token = refresh_token
 
         self.at  = access_token
         self.ats = access_token_secret
@@ -102,10 +121,15 @@ class QBS(object):
          access_token (and, of course, accompanying secret), go through the
          connect workflow.
         """
-        self.qba  = QBAuth(
-            self.ck, self.cs, access_token=self.at,
-            access_token_secret=self.ats, expires_on=self.exo,
-            verbosity=self.vb)
+        if self.oauth_version:
+            self.qba  = QBAuth(
+                self.ck, self.cs, access_token=self.at,
+                access_token_secret=self.ats, expires_on=self.exo,
+                verbosity=self.vb)
+        else:
+            self.qba = QBAuth2(self.client_id, self.client_secret,
+            refresh_token=self.refresh_token, realm_id=self.cid,
+            access_token=self.at)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 
@@ -116,7 +140,7 @@ class QBS(object):
                     print("Inspect self.qba, the QBAuth object:")
                     import ipdb;ipdb.set_trace()
 
-        self.sess = self.qba.session
+        # self.sess = self.qba.session
 
         if self.qba.new_token and self.vb > 1:
             print("New access token et al for company id {}.".format(self.cid))
@@ -180,8 +204,7 @@ class QBS(object):
                 print("inspect request_type, url, headers, data, and params:")
                 import ipdb;ipdb.set_trace()
 
-
-        response = self.sess.request(
+        response = self.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
 
