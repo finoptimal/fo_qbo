@@ -335,7 +335,9 @@ class QBAuth2():
             print("refreshing access token")
         self.session.refresh()
 
-    def request(self):
+    def request(self, request_type, url, header_auth=True, realm='', verify=True,
+                headers='', data='', **params):
+        print("QBA Making test OAuth 2 request")
         base_url = 'https://sandbox-quickbooks.api.intuit.com'
         url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, self.session.realm_id)
         auth_header = 'Bearer {0}'.format(self.session.access_token)
