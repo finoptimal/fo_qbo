@@ -275,7 +275,7 @@ class QBAuth2():
         self.new_token = False
         self._setup(refresh_token=refresh_token, access_token=access_token, realm_id=realm_id)
 
-    def _setup(self, refresh_token=None, access_token=None, realm_id=None):
+    def _setup(self):
         if self.client_id is not None and self.client_secret is not None:
             self.session = AuthClient(
                 self.client_id,
@@ -287,7 +287,11 @@ class QBAuth2():
                 realm_id=self.realm_id,
             )
         if self.access_token is None:
-            self.refresh()
+            try:
+                self.refresh()
+            except:
+                self.oob()
+                self._setup()
 
     # the following functions correspond to those in the Intuit OAuth client
     # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app

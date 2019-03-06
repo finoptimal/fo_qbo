@@ -208,7 +208,7 @@ class QBS(object):
                 print("inspect request_type, url, headers, data, and params:")
                 import ipdb;ipdb.set_trace()
 
-        response = self.request(
+        response = self.qba.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
 
