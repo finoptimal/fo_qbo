@@ -273,7 +273,7 @@ class QBAuth2():
         # save all parameters in self
         self.session = None
         self.new_token = False
-        self._setup(refresh_token=refresh_token, access_token=access_token, realm_id=realm_id)
+        self._setup()
 
     def _setup(self):
         if self.client_id is not None and self.client_secret is not None:
