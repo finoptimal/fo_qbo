@@ -17,7 +17,7 @@ from base64      import b64encode
 
 import datetime, json, os, requests, six, textwrap, time, traceback
 
-from .qba        import QBAuth
+from .qba        import QBAuth, QBAuth2
 from .mime_types import MIME_TYPES
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
@@ -121,12 +121,16 @@ class QBS(object):
          access_token (and, of course, accompanying secret), go through the
          connect workflow.
         """
-        if self.oauth_version:
+        if self.oauth_version == 1:
+            if self.vb > 5:
+                print("Using OAuth 1")
             self.qba  = QBAuth(
                 self.ck, self.cs, access_token=self.at,
                 access_token_secret=self.ats, expires_on=self.exo,
                 verbosity=self.vb)
         else:
+            if self.vb > 5:
+                print("Using OAuth 2")
             self.qba = QBAuth2(self.client_id, self.client_secret,
             refresh_token=self.refresh_token, realm_id=self.cid,
             access_token=self.at)

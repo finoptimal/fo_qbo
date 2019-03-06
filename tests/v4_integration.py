@@ -57,7 +57,6 @@ class TestQBS(unittest.TestCase):
         qbs = QBS(client_id=client_id, client_secret=client_secret,
                   refresh_token=refresh_token, company_id=realm_id, verbosity=0)
         
-
 if __name__ == "__main__":
     qba = QBAuth2(client_id, client_secret, refresh_token=refresh_token, realm_id=realm_id, access_token=access_token)
     r = qba.request()

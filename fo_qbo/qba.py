@@ -270,6 +270,7 @@ class QBAuth2():
 
         # save all parameters in self
         self.session = None
+        self.new_token = False
         self._setup(refresh_token=refresh_token, access_token=access_token, realm_id=realm_id)
 
     def _setup(self, refresh_token=None, access_token=None, realm_id=None):
@@ -307,7 +308,7 @@ class QBAuth2():
         while not authorized_callback_url:
             authorized_callback_url = input(
                 "\nPaste the entire callback URL back here (or ctrl-c):")
-        self.handle_authorized_callback_url(url)
+        self.handle_authorized_callback_url(authorized_callback_url)
 
     def handle_authorized_callback_url(self, url):
         tail = url.split("?")[1].strip()
