@@ -254,7 +254,8 @@ class QBAuth(object):
 
 class QBAuth2():
     def __init__(self, client_id, client_secret, production=False,
-                 refresh_token=None, access_token=None, realm_id=None):
+                 refresh_token=None, access_token=None, realm_id=None,
+                 verbosity=0):
         self.client_id = client_id
         self.client_secret = client_secret
         self.production = production
@@ -262,6 +263,7 @@ class QBAuth2():
         self.refresh_token = refresh_token
         self.access_token = access_token
         self.realm_id = realm_id
+        self.vb = verbosity
 
         if production:
             self.environment = 'production'
@@ -284,6 +286,8 @@ class QBAuth2():
                 access_token=self.access_token,
                 realm_id=self.realm_id,
             )
+        if self.access_token is None:
+            self.refresh()
 
     # the following functions correspond to those in the Intuit OAuth client
     # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app
@@ -320,9 +324,11 @@ class QBAuth2():
         self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
 
     def _set_access_token(self, access_token):
-        print("todo: write this to JSON?")
+        print("todo: write this to JSON")
 
     def refresh(self):
+        if self.vb > 8:
+            print("refreshing access token")
         self.session.refresh()
 
     def request(self):
