@@ -340,8 +340,6 @@ class QBAuth2():
         print("QBA Making test OAuth 2 request")
         if params and self.vb > 5:
             print("Ignoring params:", params)
-        # base_url = 'https://sandbox-quickbooks.api.intuit.com'
-        # url = '{0}/v3/company/{1}/companyinfo/{1}'.format(base_url, self.session.realm_id)
         auth_header = 'Bearer {0}'.format(self.session.access_token)
         _headers = {
             'Authorization': auth_header,
@@ -349,6 +347,7 @@ class QBAuth2():
         }
         for key,val in headers.items():
             _headers[key] = val
+        print("QBA headers", _headers)
         response = requests.request(
             request_type.upper(), url, headers=_headers, data=data)
         return response
