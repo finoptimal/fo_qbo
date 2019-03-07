@@ -134,7 +134,7 @@ class QBS(object):
                 print("Using OAuth 2")
             self.qba = QBAuth2(self.client_id, self.client_secret,
             refresh_token=self.refresh_token, realm_id=self.cid,
-            access_token=self.at)
+            access_token=self.at, verbosity=self.vb)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 

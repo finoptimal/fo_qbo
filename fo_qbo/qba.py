@@ -343,14 +343,14 @@ class QBAuth2():
 
     def request(self, request_type, url, header_auth=True, realm='', verify=True,
                 headers='', data='', **params):
-        print("QBA Making test OAuth 2 request")
         auth_header = 'Bearer {0}'.format(self.session.access_token)
         _headers = {
             'Authorization': auth_header,
         }
         for key,val in headers.items():
             _headers[key] = val
-        print("QBA headers", _headers)
+        if self.vb > 19:
+            print("QBA headers", _headers)
         response = requests.request(
             request_type.upper(), url, headers=_headers, data=data, **params)
         return response
