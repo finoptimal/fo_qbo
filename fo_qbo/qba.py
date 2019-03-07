@@ -341,7 +341,6 @@ class QBAuth2():
         auth_header = 'Bearer {0}'.format(self.session.access_token)
         _headers = {
             'Authorization': auth_header,
-            'Accept': 'application/json'
         }
         for key,val in headers.items():
             _headers[key] = val
