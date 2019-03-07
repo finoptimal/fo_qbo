@@ -289,7 +289,9 @@ class QBAuth2():
         if self.access_token is None:
             try:
                 self.refresh()
-            except:
+            except Exception as e:
+                if self.vb > 5:
+                    print('Could not refresh access token:', e)
                 self.oob()
                 self._setup()
 
@@ -327,8 +329,8 @@ class QBAuth2():
 
         self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
 
-    def _set_access_token(self, access_token):
-        print("todo: write this to JSON")
+    def _set_access_and_refresh_tokens(self, access_token, refresh_token):
+        print("todo: write these to JSON")
 
     def refresh(self):
         if self.vb > 8:
