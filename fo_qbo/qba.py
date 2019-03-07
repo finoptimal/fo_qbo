@@ -287,6 +287,8 @@ class QBAuth2():
                 realm_id=self.realm_id,
             )
         if self.access_token is None:
+            if self.vb > 5:
+                print('Access token is none')
             try:
                 self.refresh()
             except Exception as e:
@@ -331,6 +333,8 @@ class QBAuth2():
 
     def _set_access_and_refresh_tokens(self, access_token, refresh_token):
         print("todo: write these to JSON")
+        self.access_token = access_token
+        self.refresh_token = refresh_token
 
     def refresh(self):
         if self.vb > 8:
