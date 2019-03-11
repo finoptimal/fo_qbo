@@ -264,11 +264,7 @@ class QBAuth2():
         self.access_token = access_token
         self.realm_id = realm_id
         self.vb = verbosity
-
-        if production:
-            self.environment = 'production'
-        else:
-            self.environment = 'sandbox'
+        self.environment = 'production'
 
         # save all parameters in self
         self.session = None
@@ -301,7 +297,18 @@ class QBAuth2():
     # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app
     def get_authorize_url(self):
         # TODO: implement out-of-bounds authorization
-        url = self.session.get_authorization_url([Scopes.ACCOUNTING])
+        url = self.session.get_authorization_url([
+            Scopes.ACCOUNTING,
+            Scopes.ADDRESS,
+            Scopes.EMAIL,
+            # Scopes.INTUIT_NAME,
+            Scopes.OPENID,
+            # Scopes.PAYMENT,
+            # Scopes.PAYROLL,
+            # Scopes.PAYROLL_TIMETRACKING,
+            Scopes.PHONE,
+            Scopes.PROFILE
+        ])
         return url
 
     def get_tokens_and_expiry(self, auth_code):

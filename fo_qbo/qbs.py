@@ -62,8 +62,7 @@ class QBS(object):
     """
     Basic unit of engagement, an rauth OAuth1Session wrapper.
     """
-    # API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
-    API_BASE_URL      = "https://sandbox-quickbooks.api.intuit.com/v3/company"
+    API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
