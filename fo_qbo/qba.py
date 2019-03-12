@@ -347,6 +347,9 @@ class QBAuth2():
         if self.vb > 8:
             print("refreshing access token")
         self.session.refresh()
+        if self.vb > 12:
+            print("refresh token", self.session.refresh_token)
+            print("access token", self.session.access_token)
 
     def request(self, request_type, url, header_auth=True, realm='', verify=True,
                 headers='', data='', **params):
