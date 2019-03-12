@@ -342,6 +342,9 @@ class QBAuth2():
         print("todo: write these to JSON")
         self.access_token = access_token
         self.refresh_token = refresh_token
+        if self.vb > 12:
+            print("refresh token", self.session.refresh_token)
+            print("access token", self.session.access_token)
 
     def refresh(self):
         if self.vb > 8:
