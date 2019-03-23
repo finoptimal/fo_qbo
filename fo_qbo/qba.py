@@ -339,7 +339,7 @@ class QBAuth2():
         self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
 
     def _set_access_and_refresh_tokens(self, access_token, refresh_token):
-        print("todo: write these to JSON")
+        self.new_token = True
         self.access_token = access_token
         self.refresh_token = refresh_token
         if self.vb > 12:
@@ -347,6 +347,7 @@ class QBAuth2():
             print("access token", self.session.access_token)
 
     def refresh(self):
+        self.new_token = True
         if self.vb > 8:
             print("refreshing access token")
         self.session.refresh()
