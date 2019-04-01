@@ -233,8 +233,14 @@ class QBS(object):
             error_message = response.json()
         except:
             error_message = response.text
-
-        raise Exception(error_message)
+        if self.oauth_version == 2:
+            if response.status_code == 401:
+                if self.vb > 1:
+                    print("qbs._basic_call failed with 401; need new refresh token")
+                self.qba.oob()
+                self._basic_call(request_type, url, data, params)
+        else:
+            raise Exception(error_message)
 
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
