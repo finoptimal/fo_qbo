@@ -246,10 +246,11 @@ class QBAuth(object):
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
-    def request(self, request_type, url, header_auth=True, realm='', verify=True,
+    def request(self, request_type, url, header_auth=True, realm=None,
+                verify=True,
                 headers='', data='', **params):
         return self.session.request(
-            request_type.upper(), url, header_auth=True, realm=self.cid,
+            request_type.upper(), url, header_auth=True, realm=realm,
             verify=True, headers=headers, data=data, **params)
 
 class QBAuth2():
@@ -259,7 +260,8 @@ class QBAuth2():
         self.client_id = client_id
         self.client_secret = client_secret
         self.production = production
-        self.redirect_uri = 'https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl'
+        self.redirect_uri = "/".join([
+            'https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl'])
         self.refresh_token = refresh_token
         self.access_token = access_token
         self.realm_id = realm_id
@@ -336,7 +338,8 @@ class QBAuth2():
         self.realm_id                   = params["realmId"]
         print("This company's (realm) ID: {}".format(self.realm_id))
 
-        self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
+        self._set_access_and_refresh_tokens(
+            self.session.access_token, self.session.refresh_token)
 
     def _set_access_and_refresh_tokens(self, access_token, refresh_token):
         self.new_token = True
@@ -350,10 +353,11 @@ class QBAuth2():
         if self.vb > 8:
             print("refreshing access token")
         self.session.refresh()
-        self._set_access_and_refresh_tokens(self.session.access_token, self.session.refresh_token)
+        self._set_access_and_refresh_tokens(
+            self.session.access_token, self.session.refresh_token)
 
-    def request(self, request_type, url, header_auth=True, realm='', verify=True,
-                headers='', data='', **params):
+    def request(self, request_type, url, header_auth=True, realm='',
+                verify=True, headers='', data='', **params):
         auth_header = 'Bearer {0}'.format(self.session.access_token)
         _headers = {
             'Authorization': auth_header,
