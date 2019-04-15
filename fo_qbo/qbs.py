@@ -8,14 +8,12 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
-from __future__  import print_function
-
 from builtins    import str
 from builtins    import object
 from rauth       import OAuth1Session
 from base64      import b64encode
 
-import datetime, json, os, requests, six, textwrap, time, traceback
+import datetime, json, os, requests, textwrap, time, traceback
 
 from .qba        import QBAuth, QBAuth2
 from .mime_types import MIME_TYPES
@@ -50,7 +48,6 @@ def retry(max_tries=3, delay_secs=0.2):
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
-                        # six.print_("Failing after {} tries!".format(attempts))
                         raise
                     # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
