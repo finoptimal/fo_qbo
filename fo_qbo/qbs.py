@@ -131,9 +131,10 @@ class QBS(object):
         else:
             if self.vb > 5:
                 print("Using OAuth 2")
-            self.qba = QBAuth2(self.client_id, self.client_secret,
-            refresh_token=self.refresh_token, realm_id=self.cid,
-            access_token=self.at, verbosity=self.vb)
+            self.qba = QBAuth2(
+                self.client_id, self.client_secret,
+                refresh_token=self.refresh_token, realm_id=self.cid,
+                access_token=self.at, verbosity=self.vb)
         # To do: check token freshness, reconnecting if necessary
         # To do: initiate and process token request if no self.at yet
 
@@ -177,6 +178,7 @@ class QBS(object):
                 headers.update({"Content-Type" : "application/octet-stream"})
 
             elif isinstance(data, dict):
+                orig_data = data.copy() # For Troubleshooting
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
@@ -480,7 +482,7 @@ class QBS(object):
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},
                      "IncludeOnSend" : include_on_send},],})
-
+    
         request_body    = textwrap.dedent(
             """
             --{}
@@ -493,17 +495,13 @@ class QBS(object):
             Content-Type: {}
             Content-Length: {:d}
             Content-Transfer-Encoding: base64
-
+            
             {}
             --{}--
             """
         ).format(boundary, "metadata.json", json.dumps(jd, indent=0),
-                 boundary, name, mime_type, len(binary_data), binary_data,
-                 boundary)
-
-        if isinstance(request_body, str):
-            request_body = request_body.encode("utf8")
-
+                 boundary, name, mime_type, len(binary_data),
+                 binary_data.decode('utf-8'), boundary)
         data = {
             "headers"      : headers.copy(),
             "request_body" : request_body
