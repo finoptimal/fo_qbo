@@ -293,6 +293,7 @@ class QBAuth2():
                 self.oob()
                 self._setup()
 
+
     # the following functions correspond to those in the Intuit OAuth client
     # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app
     def get_authorize_url(self):
@@ -364,4 +365,6 @@ class QBAuth2():
             print("QBA headers", _headers)
         response = requests.request(
             request_type.upper(), url, headers=_headers, data=data, **params)
+        if self.vb > 10:
+            print("response code:", response.status_code)
         return response
