@@ -8,14 +8,12 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
-from __future__  import print_function
-
 from builtins    import str
 from builtins    import object
 from rauth       import OAuth1Session
 from base64      import b64encode
 
-import datetime, json, os, requests, six, textwrap, time, traceback
+import datetime, json, os, requests, textwrap, time, traceback
 
 from .qba        import QBAuth, QBAuth2
 from .mime_types import MIME_TYPES
@@ -50,7 +48,6 @@ def retry(max_tries=3, delay_secs=0.2):
                     tries    -= 1
                     attempts += 1
                     if tries <= 0:
-                        # six.print_("Failing after {} tries!".format(attempts))
                         raise
                     # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
@@ -185,6 +182,7 @@ class QBS(object):
                 headers.update({"Content-Type" : "application/octet-stream"})
 
             elif isinstance(data, dict):
+                orig_data = data.copy() # For Troubleshooting
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
@@ -241,10 +239,14 @@ class QBS(object):
             error_message = response.json()
         except:
             error_message = response.text
+
         if self.oauth_version == 2:
             if response.status_code == 401:
-                    raise ConnectionRefusedError("qbs._basic_call failed with 401; need new refresh token "+
-                          "delete refresh token from darkonim file")
+                # currently, the infrastructure that might call _basic_call()
+                # does not support saving new refresh tokens if OOB is called in this
+                # state. So we need to start fresh with no refresh token
+                raise ConnectionRefusedError("QBS._basic_call failed with 401; need new refresh token. "+
+                      "Delete refresh token and re-instantiate QBS")
         raise ConnectionRefusedError(error_message)
 
     def query(self, object_type, where_tail=None, count_only=False, **params):
@@ -501,12 +503,8 @@ class QBS(object):
             --{}--
             """
         ).format(boundary, "metadata.json", json.dumps(jd, indent=0),
-                 boundary, name, mime_type, len(binary_data), binary_data,
-                 boundary)
-
-        if isinstance(request_body, str):
-            request_body = request_body.encode("utf8")
-
+                 boundary, name, mime_type, len(binary_data),
+                 binary_data.decode('utf-8'), boundary)
         data = {
             "headers"      : headers.copy(),
             "request_body" : request_body
