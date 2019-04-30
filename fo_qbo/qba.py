@@ -249,10 +249,31 @@ class QBAuth(object):
     def request(self, request_type, url, header_auth=True, realm=None,
                 verify=True,
                 headers='', data='', **params):
-        return self.session.request(
+        """
+        if headers == "":
+            headers = {}
+        test_headers = headers.copy()
+        test_headers.update(dict(
+            access_token=self.access_token,
+            access_token_secret=self.access_token_secret,
+            consumer_key=self.consumer_key,
+            consumer_secret=self.consumer_secret))
+
+        # Need to explore signing the request somehow, looks pretty involved,
+        #  so for now deciding NOT to try to factor out OAuth
+
+        return getattr(requests, request_type.lower())(url, verify=True, headers=test_headers, data=data, **params)
+        """
+
+        resp = self.session.request(
             request_type.upper(), url, header_auth=True, realm=realm,
             verify=True, headers=headers, data=data, **params)
+       
+        #import ipdb;ipdb.set_trace()
 
+        return resp
+        
+    
 class QBAuth2():
     def __init__(self, client_id, client_secret, production=False,
                  refresh_token=None, access_token=None, realm_id=None,

@@ -180,6 +180,7 @@ class QBS(object):
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
                     data    = data["request_body"] + ""    # should be text
+                    #data    = data["request_body"].encode("utf-8")
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
