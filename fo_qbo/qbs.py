@@ -128,11 +128,18 @@ class QBS(object):
         else:
             if self.vb > 5:
                 print("Using OAuth 2")
-            self.qba = QBAuth2(
-                self.client_id, self.client_secret,
-                refresh_token=self.refresh_token, realm_id=self.cid,
-                access_token=self.at, verbosity=self.vb)
-        # To do: check token freshness, reconnecting if necessary
+            self.qba = QBAuth2(self.client_id, self.client_secret,
+                        refresh_token=self.refresh_token, realm_id=self.cid,
+                        access_token=self.at, verbosity=self.vb)
+            if self.at:
+                # check if access token is fresh
+                test_query = self.qba.request('GET', f"{self.API_BASE_URL}/{self.cid}/companyinfo/{self.cid}",
+                                              headers={"accept" : "application/json"})
+                if test_query.status_code == 401:
+                    # access token could be old--try forcing QBA to refresh
+                    self.qba = QBAuth2(self.client_id, self.client_secret,
+                                refresh_token=self.refresh_token, realm_id=self.cid,
+                                access_token=None, verbosity=self.vb)
         # To do: initiate and process token request if no self.at yet
 
         if not self.qba.session:
@@ -233,16 +240,15 @@ class QBS(object):
             error_message = response.json()
         except:
             error_message = response.text
-            
+
         if self.oauth_version == 2:
             if response.status_code == 401:
-                if self.vb > 1:
-                    print("qbs._basic_call failed with 401;",
-                          "need new refresh token")
-                self.qba.oob()
-                self._basic_call(request_type, url, data, params)
-        else:
-            raise Exception(error_message)
+                # currently, the infrastructure that might call _basic_call()
+                # does not support saving new refresh tokens if OOB is called in this
+                # state. So we need to start fresh with no refresh token
+                raise ConnectionRefusedError("QBS._basic_call failed with 401; need new refresh token. "+
+                      "Delete refresh token and re-instantiate QBS")
+        raise ConnectionRefusedError(error_message)
 
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
@@ -480,7 +486,7 @@ class QBS(object):
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},
                      "IncludeOnSend" : include_on_send},],})
-    
+
         request_body    = textwrap.dedent(
             """
             --{}
@@ -493,7 +499,7 @@ class QBS(object):
             Content-Type: {}
             Content-Length: {:d}
             Content-Transfer-Encoding: base64
-            
+
             {}
             --{}--
             """
