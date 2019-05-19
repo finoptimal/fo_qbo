@@ -57,17 +57,21 @@ def retry(max_tries=3, delay_secs=0.2):
 
 class QBS(object):
     """
-    Basic unit of engagement, an rauth OAuth1Session wrapper.
+    Basic wrapper, with auth functionality broken out into the QBA class
     """
     API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
-    def __init__(self, consumer_key=None, consumer_secret=None,           #oauth 1
-                 client_id=None, client_secret=None, refresh_token=None, #oauth 2
-                 access_token=None, access_token_secret=None, company_id=None,
-                 callback_url=None, expires_on=None, minor_api_version=None,
-                 verbosity=0):
+    def __init__(
+            self,
+            # oauth 1:
+            consumer_key=None, consumer_secret=None,
+            # oauth 2
+            client_id=None, client_secret=None, refresh_token=None, 
+            access_token=None, access_token_secret=None, company_id=None,
+            callback_url=None, expires_on=None, minor_api_version=None,
+            verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -90,23 +94,28 @@ class QBS(object):
                 (refresh_token is not None and company_id is not None):
             self.oauth_version = 2
         else:
-            raise ValueError("Could not create connection to QB API, not enough credentials")
+            raise ValueError(
+                "Could not create connection to QB API, not enough credentials")
 
+        # Oauth 1
         self.ck  = consumer_key
         self.cs  = consumer_secret
 
+        # Oauth 2
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
 
+        # Oauth 1 & Oauth2
         self.at  = access_token
-        self.ats = access_token_secret
-
         self.cid = company_id
-
-        self.cbu = callback_url
+        
+        # Oauth 1:
+        self.ats = access_token_secret
         self.exo = expires_on
 
+        self.cbu = callback_url
+        
         self.mav = minor_api_version
         self.vb  = verbosity
 
