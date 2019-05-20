@@ -1,7 +1,3 @@
-standard_library.install_aliases()
-from builtins import input
-from builtins import str
-from builtins import object
 from rauth import OAuth1Service, OAuth1Session
 from intuitlib.client import AuthClient
 from intuitlib.enums import Scopes

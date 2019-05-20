@@ -8,8 +8,6 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
-from builtins    import str
-from builtins    import object
 from rauth       import OAuth1Session
 from base64      import b64encode
 
