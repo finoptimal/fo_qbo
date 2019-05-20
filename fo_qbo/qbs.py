@@ -140,13 +140,17 @@ class QBS(object):
                         access_token=self.at, verbosity=self.vb)
             if self.at:
                 # check if access token is fresh
-                test_query = self.qba.request('GET', f"{self.API_BASE_URL}/{self.cid}/companyinfo/{self.cid}",
-                                              headers={"accept" : "application/json"})
+                test_query = self.qba.request(
+                    'GET', ".".join([
+                        f"{self.API_BASE_URL}/{self.cid}",
+                        f"companyinfo/{self.cid}"]),
+                    headers={"accept" : "application/json"})
                 if test_query.status_code == 401:
                     # access token could be old--try forcing QBA to refresh
-                    self.qba = QBAuth2(self.client_id, self.client_secret,
-                                refresh_token=self.refresh_token, realm_id=self.cid,
-                                access_token=None, verbosity=self.vb)
+                    self.qba = QBAuth2(
+                        self.client_id, self.client_secret,
+                        refresh_token=self.refresh_token, realm_id=self.cid,
+                        access_token=None, verbosity=self.vb)
         # To do: initiate and process token request if no self.at yet
 
         if not self.qba.session:
@@ -155,8 +159,6 @@ class QBS(object):
                 if self.vb > 8:
                     print("Inspect self.qba, the QBAuth object:")
                     import ipdb;ipdb.set_trace()
-
-        # self.sess = self.qba.session
 
         if self.qba.new_token and self.vb > 1:
             print("New access token et al for company id {}.".format(self.cid))
@@ -576,3 +578,6 @@ class QBS(object):
 
         return self._basic_call(
             "POST", url, **{"params" : {"params" : {"sendTo" : recipient}}})
+
+    def __repr__(self):
+        return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"

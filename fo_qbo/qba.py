@@ -266,6 +266,9 @@ class QBAuth(object):
         #import ipdb;ipdb.set_trace()
 
         return resp
+
+    def __repr__(self):
+        return f"<QBAuth (Oauth Version 1)>"
         
     
 class QBAuth2():
@@ -387,3 +390,6 @@ class QBAuth2():
         if self.vb > 10:
             print("response code:", response.status_code)
         return response
+
+    def __repr__(self):
+        return f"<QBAuth (Oauth Version 2)>"
