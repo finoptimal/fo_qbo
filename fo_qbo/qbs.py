@@ -69,7 +69,7 @@ class QBS(object):
             client_id=None, client_secret=None, refresh_token=None, 
             access_token=None, access_token_secret=None, company_id=None,
             callback_url=None, expires_on=None, minor_api_version=None,
-            verbosity=0):
+            migrate=False, verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -85,9 +85,17 @@ class QBS(object):
         connector_callback and reconnector_callback are what happens when
          we first connect or when we reconnect, getting a new access token
          in either case.
+
+        If migrate, you must pass ALL OAuth1 credentials (including a valid
+         access token) AND OAuth2 client credentials (without a refresh token,
+         obviously.
         """
+        self.migrate = migrate
         if consumer_key is not None and consumer_secret is not None:
             self.oauth_version = 1
+            if not access_token is None and not access_token_secret is None:
+                if self.migrate:
+                    self.oauth_version = 2
         elif (client_id is not None and client_secret is not None) or \
                 (refresh_token is not None and company_id is not None):
             self.oauth_version = 2
@@ -135,6 +143,9 @@ class QBS(object):
         else:
             if self.vb > 5:
                 print("Using OAuth 2")
+            if self.migrate:
+                raise NotImplementedError()
+                
             self.qba = QBAuth2(self.client_id, self.client_secret,
                         refresh_token=self.refresh_token, realm_id=self.cid,
                         access_token=self.at, verbosity=self.vb)
@@ -151,8 +162,9 @@ class QBS(object):
                         self.client_id, self.client_secret,
                         refresh_token=self.refresh_token, realm_id=self.cid,
                         access_token=None, verbosity=self.vb)
-        # To do: initiate and process token request if no self.at yet
 
+            # To do: initiate and process token request if no self.at yet
+            
         if not self.qba.session:
             if self.vb > 1:
                 print("QBS has no working access token!")

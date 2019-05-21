@@ -274,7 +274,7 @@ class QBAuth(object):
 class QBAuth2():
     def __init__(self, client_id, client_secret, production=False,
                  refresh_token=None, access_token=None, realm_id=None,
-                 verbosity=0):
+                 migrate=False, verbosity=0):
         self.client_id = client_id
         self.client_secret = client_secret
         self.production = production
@@ -287,8 +287,9 @@ class QBAuth2():
         self.environment = 'production'
 
         # save all parameters in self
-        self.session = None
+        self.session   = None
         self.new_token = False
+        self.migrate   = migrate
         self._setup()
 
     def _setup(self):
@@ -304,7 +305,7 @@ class QBAuth2():
             )
         if self.access_token is None:
             if self.vb > 5:
-                print('Access token is none')
+                print('Access token is None')
             try:
                 self.refresh()
             except Exception as e:
