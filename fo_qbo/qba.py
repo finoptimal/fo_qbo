@@ -1,10 +1,13 @@
-from rauth import OAuth1Service, OAuth1Session
-from intuitlib.client import AuthClient
-from intuitlib.enums import Scopes
-from io import StringIO
-import datetime, json, time
-from urllib.parse import urlparse, parse_qs
-import requests
+from __future__ import print_function
+
+import datetime, json, requests, time
+
+from rauth               import OAuth1Service, OAuth1Session
+from intuitlib.client    import AuthClient
+from intuitlib.enums     import Scopes
+from intuitlib.migration import migrate
+from io                  import StringIO
+from urllib.parse        import urlparse, parse_qs
 
 # Intuit OAuth Service URLs
 REQUEST_TOKEN_URL = "https://oauth.intuit.com/oauth/v1/get_request_token"
@@ -88,8 +91,8 @@ class QBAuth(object):
         access_token, access_token_secret = \
             self.get_access_token_response(
                 params['oauth_token'], params['oauth_verifier'])
-        self.company_id                   = params["realmId"]
-        print("This company's (realm) ID: {}".format(self.company_id))
+        self.realm_id                     = params["realmId"]
+        print("This company's (realm) ID: {}".format(self.realm_id))
 
         self._set_access_token(access_token, access_token_secret)
 
@@ -151,18 +154,14 @@ class QBAuth(object):
             raise Exception("Request token and secret required for " \
                     "access token retrieval")
 
-        qbService = OAuth1Service(
+        qs = OAuth1Service(
             name="quickbooks-wrapper",
             consumer_key=self.consumer_key,
             consumer_secret=self.consumer_secret,
             access_token_url=ACCESS_TOKEN_URL,
             base_url=None)
 
-        access_token, access_token_secret = \
-            qbService.get_access_token(self.request_token,
-                                       self.request_token_secret,
-                                       params = { 'oauth_token': oauth_token,
-                                           'oauth_verifier': oauth_verifier })
+        access_token, access_token_secret = qs.get_access_token(self.request_token, self.request_token_secret, params = { 'oauth_token': oauth_token, 'oauth_verifier': oauth_verifier })
 
         return access_token, access_token_secret
 
@@ -223,174 +222,180 @@ class QBAuth(object):
             raise Exception(
                 "Access token and access token secret are required!")
 
-        try:
-            qbSession = OAuth1Session(
-                    self.consumer_key, self.consumer_secret,
-                    self.access_token, self.access_token_secret)
-            resp      = qbSession.get(DISCONNECT_URL,
-                    params = { 'format': 'json' })
-            if resp.status_code >= 400:
-                raise Exception("Request failed with status %s (%s)" %
-                                (resp.status_code, resp.text))
-        except:
-            raise
-
+        print(f"Disconnecting access token {self.access_token}!") 
+        
+        qbSession = OAuth1Session(
+            self.consumer_key, self.consumer_secret,
+            self.access_token, self.access_token_secret)
+        resp      = qbSession.get(DISCONNECT_URL,
+                                  params = { 'format': 'json' })
+        if resp.status_code >= 400:
+            raise Exception("Disconnection request failed with status %s (%s)" %
+                            (resp.status_code, resp.text))
+        
         if resp.json()['ErrorCode'] > 0:
-            print(jsond.dumps(resp.json(), indent=4))
+            print(json.dumps(resp.json(), indent=4))
             raise Exception("Reconnect failed with code %s (%s)" %
                 (resp.json()['ErrorCode'], resp.json()['ErrorMessage']))
 
     def request(self, request_type, url, header_auth=True, realm=None,
                 verify=True,
                 headers='', data='', **params):
-        """
-        if headers == "":
-            headers = {}
-        test_headers = headers.copy()
-        test_headers.update(dict(
-            access_token=self.access_token,
-            access_token_secret=self.access_token_secret,
-            consumer_key=self.consumer_key,
-            consumer_secret=self.consumer_secret))
-
-        # Need to explore signing the request somehow, looks pretty involved,
-        #  so for now deciding NOT to try to factor out OAuth
-
-        return getattr(requests, request_type.lower())(url, verify=True, headers=test_headers, data=data, **params)
-        """
-
         resp = self.session.request(
             request_type.upper(), url, header_auth=True, realm=realm,
             verify=True, headers=headers, data=data, **params)
        
-        #import ipdb;ipdb.set_trace()
-
         return resp
 
     def __repr__(self):
-        return f"<QBAuth (Oauth Version 1)>"
+        return "<QBAuth (Oauth Version 1)>"
         
-    
 class QBAuth2():
-    def __init__(self, client_id, client_secret, production=False,
-                 refresh_token=None, access_token=None, realm_id=None,
-                 migrate=False, verbosity=0):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.production = production
-        self.redirect_uri = "/".join([
-            'https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl'])
-        self.refresh_token = refresh_token
-        self.access_token = access_token
-        self.realm_id = realm_id
-        self.vb = verbosity
-        self.environment = 'production'
+    def __init__(self, client_id, client_secret,  realm_id=None,
+                 refresh_token=None, access_token=None,
+                 callback_url=CALLBACK_URL, verbosity=0):
+        self.client_id           = client_id
+        self.client_secret       = client_secret
+        self.refresh_token       = refresh_token
+        self.access_token        = access_token
+        self.realm_id            = realm_id
+        self.vb                  = verbosity
+        self.environment         = "production"
 
-        # save all parameters in self
-        self.session   = None
-        self.new_token = False
-        self.migrate   = migrate
+        self.session             = None
+        self.new_token           = False
+        self.callback_url        = callback_url
+
         self._setup()
 
+    SCOPES = [
+        Scopes.ACCOUNTING,
+        Scopes.ADDRESS,
+        Scopes.EMAIL,
+        # Scopes.INTUIT_NAME,
+        Scopes.OPENID,
+        # Scopes.PAYMENT,
+        # Scopes.PAYROLL,
+        # Scopes.PAYROLL_TIMETRACKING,
+        Scopes.PHONE,
+        Scopes.PROFILE
+    ]
+        
     def _setup(self):
-        if self.client_id is not None and self.client_secret is not None:
-            self.session = AuthClient(
-                self.client_id,
-                self.client_secret,
-                self.redirect_uri,
-                self.environment,
-                refresh_token=self.refresh_token,
-                access_token=self.access_token,
-                realm_id=self.realm_id,
-            )
-        if self.access_token is None:
-            if self.vb > 5:
-                print('Access token is None')
-            try:
-                self.refresh()
-            except Exception as e:
-                if self.vb > 5:
-                    print('Could not refresh access token:', e)
-                self.oob()
-                self._setup()
+        if self.client_id is None or self.client_secret is None:
+            raise Exception(
+                "Need a client_id and client_secret to get started!")
 
-
-    # the following functions correspond to those in the Intuit OAuth client
-    # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html#authorize-your-app
-    def get_authorize_url(self):
-        # TODO: implement out-of-bounds authorization
-        url = self.session.get_authorization_url([
-            Scopes.ACCOUNTING,
-            Scopes.ADDRESS,
-            Scopes.EMAIL,
-            # Scopes.INTUIT_NAME,
-            Scopes.OPENID,
-            # Scopes.PAYMENT,
-            # Scopes.PAYROLL,
-            # Scopes.PAYROLL_TIMETRACKING,
-            Scopes.PHONE,
-            Scopes.PROFILE
-        ])
-        return url
-
-    def get_tokens_and_expiry(self, auth_code):
-        self.session.get_bearer_token(auth_code)
-
-    def oob(self, callback_url=CALLBACK_URL):
-        """
-        Out of Band solution adapted from QBAuth.
-        """
-        self.authorize_url = self.get_authorize_url()
-
-        print("Please send the user here to authorize this app to access ")
-        print(" their QBO data:\n")
-        print(self.authorize_url)
-        authorized_callback_url = None
-        while not authorized_callback_url:
-            authorized_callback_url = input(
-                "\nPaste the entire callback URL back here (or ctrl-c):")
-        self.handle_authorized_callback_url(authorized_callback_url)
-
-    def handle_authorized_callback_url(self, url):
-        tail = url.split("?")[1].strip()
-        params = dict([ tuple(param.split("=")) for param in tail.split("&") ])
-        self.get_tokens_and_expiry(params['code'])
-        self.realm_id                   = params["realmId"]
-        print("This company's (realm) ID: {}".format(self.realm_id))
-
-        self._set_access_and_refresh_tokens(
-            self.session.access_token, self.session.refresh_token)
-
-    def _set_access_and_refresh_tokens(self, access_token, refresh_token):
-        self.new_token = True
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        if self.vb > 12:
-            print("refresh token", self.session.refresh_token)
-            print("access token", self.session.access_token)
-
-    def refresh(self):
-        if self.vb > 8:
-            print("refreshing access token")
-        self.session.refresh()
-        self._set_access_and_refresh_tokens(
-            self.session.access_token, self.session.refresh_token)
+        self.session = AuthClient(
+            self.client_id,
+            self.client_secret,
+            self.callback_url,
+            self.environment,
+            refresh_token=self.refresh_token,
+            access_token=self.access_token,
+            realm_id=self.realm_id)
 
     def request(self, request_type, url, header_auth=True, realm='',
                 verify=True, headers='', data='', **params):
+        """
+        We don't handle authorization until the session's first request happens.
+        """
+        self.establish_access()
         auth_header = 'Bearer {0}'.format(self.session.access_token)
         _headers = {
             'Authorization': auth_header,
         }
         for key,val in headers.items():
             _headers[key] = val
+            
         if self.vb > 19:
             print("QBA headers", _headers)
+            
         response = requests.request(
             request_type.upper(), url, headers=_headers, data=data, **params)
+        
+        if response.status_code == 401:
+            self.refresh()
+            
         if self.vb > 10:
             print("response code:", response.status_code)
+            
         return response
 
+    def establish_access(self):
+        if getattr(self, "_has_access", False):
+            return
+        
+        if self.refresh_token is None:
+            self.oob()
+
+        if self.access_token is None:
+            if self.vb > 5:
+                print(f"\nNo {self.realm_id} access_token available,", 
+                      "so attempting refresh using available refresh_token...")
+                
+            try:
+                self.refresh()
+            except Exception as exc:
+                print("\n Couldn't refresh access_token / refresh_token:", exc) 
+                raise
+
+        
+        self._has_access = True
+            
+    # the following functions correspond to those in the Intuit OAuth client
+    # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html
+    #  #authorize-your-app
+    def get_authorize_url(self):
+        url = self.session.get_authorization_url(self.SCOPES)
+        return url
+
+    def get_tokens_and_expiry(self, auth_code):
+        return self.session.get_bearer_token(auth_code)
+
+    def oob(self, callback_url=CALLBACK_URL):
+        """
+        Out of Band solution adapted from QBAuth.
+        """
+        self.authorize_url = self.get_authorize_url()
+        print("Please send the user here to authorize this app to access ")
+        print(" their QBO data:\n")
+        print(self.authorize_url)
+        authorized_callback_url     = None
+        while not authorized_callback_url:
+            authorized_callback_url = input(
+                "\nPaste the entire callback URL back here (or ctrl-c):")
+        self.handle_authorized_callback_url(authorized_callback_url)
+
+    def handle_authorized_callback_url(self, url):
+        tail               = url.split("?")[1].strip()
+        params             = dict([
+            tuple(param.split("=")) for param in tail.split("&") ])
+        resp               = self.get_tokens_and_expiry(params['code'])
+        self.realm_id      = params["realmId"]
+        # We definitely have a new refresh token...
+        self.access_token  = self.session.access_token
+        self.refresh_token = self.session.refresh_token
+        if self.vb > 2:
+            print("\nThis company's (realm) ID: {}".format(self.realm_id))
+            print("     new refresh token:", self.session.refresh_token)
+            print("     new access token:", self.session.access_token, "\n")
+        self.new_token     = True
+
+    def refresh(self):
+        if self.vb > 2:
+            print(f"\nRefreshing {self.realm_id}'s refresh and access tokens!") 
+        self.session.refresh()
+        self.access_token  = self.session.access_token
+        self.refresh_token = self.session.refresh_token
+        if self.vb > 2:
+            print("  Success!\n")
+        self.new_token     = True
+
+    def disconnect(self):
+        print(f"Disconnecting {self.realm_id}'s access token!") 
+        resp = self.session.revoke(token=self.refresh_token)
+        raise NotImplementedError()
+        
     def __repr__(self):
-        return f"<QBAuth (Oauth Version 2)>"
+        return "<QBAuth (Oauth Version 2)>"

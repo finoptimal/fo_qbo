@@ -8,6 +8,8 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
+from __future__ import print_function
+
 from rauth       import OAuth1Session
 from base64      import b64encode
 
@@ -68,7 +70,8 @@ class QBS(object):
             # oauth 2
             client_id=None, client_secret=None, refresh_token=None, 
             access_token=None, access_token_secret=None, company_id=None,
-            callback_url=None, expires_on=None, minor_api_version=None,
+            callback_url=None, expires_on=None, expires_at=None,
+            new_token_callback_function=None, minor_api_version=None,
             migrate=False, verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
@@ -91,13 +94,13 @@ class QBS(object):
          obviously.
         """
         self.migrate = migrate
-        if consumer_key is not None and consumer_secret is not None:
+        if not access_token_secret is None:
+            # If there is no active OAuth1 access_tokens (and presumably, then,
+            #  no access_token_secret), we use OAuth2. The deprecated Py2
+            #  version of this wrapper is the only way to still get OAuth1
+            #  access tokens (which will become impossible in December, 2019)
             self.oauth_version = 1
-            if not access_token is None and not access_token_secret is None:
-                if self.migrate:
-                    self.oauth_version = 2
-        elif (client_id is not None and client_secret is not None) or \
-                (refresh_token is not None and company_id is not None):
+        elif not client_id is None  and not client_secret   is None:
             self.oauth_version = 2
         else:
             raise ValueError(
@@ -108,9 +111,11 @@ class QBS(object):
         self.cs  = consumer_secret
 
         # Oauth 2
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.refresh_token = refresh_token
+        self.cli   = client_id
+        self.cls   = client_secret
+        self.rt    = refresh_token
+        self.exa   = expires_at
+        self.ntcbf = new_token_callback_function
 
         # Oauth 1 & Oauth2
         self.at  = access_token
@@ -136,46 +141,57 @@ class QBS(object):
         if self.oauth_version == 1:
             if self.vb > 5:
                 print("Using OAuth 1")
+
             self.qba  = QBAuth(
                 self.ck, self.cs, access_token=self.at,
                 access_token_secret=self.ats, expires_on=self.exo,
                 verbosity=self.vb)
-        else:
+            
+            if self.migrate:
+                self.oauth_version = 2
+                if not self.at is None:
+                    # The Intuit migration function fails, so just disconnect
+                    #  OAuth1 access_token and create an OAuth2 one.
+                    if self.vb < 8:
+                        print("Rerun with verbosity >= 8 to migrate!")
+                        return
+                    self.qba.disconnect()
+                    return self._setup()
+
+        if self.oauth_version == 2:
             if self.vb > 5:
                 print("Using OAuth 2")
-            if self.migrate:
-                raise NotImplementedError()
-                
-            self.qba = QBAuth2(self.client_id, self.client_secret,
-                        refresh_token=self.refresh_token, realm_id=self.cid,
-                        access_token=self.at, verbosity=self.vb)
-            if self.at:
-                # check if access token is fresh
-                test_query = self.qba.request(
-                    'GET', ".".join([
-                        f"{self.API_BASE_URL}/{self.cid}",
-                        f"companyinfo/{self.cid}"]),
-                    headers={"accept" : "application/json"})
-                if test_query.status_code == 401:
-                    # access token could be old--try forcing QBA to refresh
-                    self.qba = QBAuth2(
-                        self.client_id, self.client_secret,
-                        refresh_token=self.refresh_token, realm_id=self.cid,
-                        access_token=None, verbosity=self.vb)
 
-            # To do: initiate and process token request if no self.at yet
-            
-        if not self.qba.session:
+            if not self.exa is None:
+                if self.exa < str(datetime.datetime.utcnow()):
+                    if self.vb > 2:
+                        print(f"\n{self.cid}'s access_token has expired;",
+                              "not passing to QBA.\n")
+                    self.at = None
+                
+            self.qba = QBAuth2(
+                self.cli, self.cls, realm_id=self.cid,
+                refresh_token=self.rt, access_token=self.at,
+                callback_url=self.cbu, verbosity=self.vb)
+
+            if self.cid is None:
+                self.qba.establish_access()
+                self.address_new_oauth2_token()
+                
+        if self.qba.session is None:
             if self.vb > 1:
                 print("QBS has no working access token!")
                 if self.vb > 8:
                     print("Inspect self.qba, the QBAuth object:")
                     import ipdb;ipdb.set_trace()
 
-        if self.qba.new_token and self.vb > 1:
-            print("New access token et al for company id {}.".format(self.cid))
-            print("Don't forget to store it!")
-
+        if self.qba.new_token and self.oauth_version == 1:
+            if self.cid is None:
+                self.cid = self.qba.realm_id
+            if self.vb > 1:
+                print(f"New access token et al for company id {self.cid}.")
+                print("Don't forget to store it!")
+                
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
         """
@@ -187,6 +203,11 @@ class QBS(object):
         if not "minorversion" in url and not self.mav is None:
             url += "?minorversion={}".format(str(int(self.mav)))
         """
+        original_params = params.copy()
+        original_data   = None
+        if isinstance(data, str):
+            original_data = data + ""
+            
         if not "minorversion" in params.get("params", {}) and \
            not self.mav is None:
             if not "params" in params:
@@ -247,6 +268,11 @@ class QBS(object):
                 print("inspect response:")
                 import ipdb;ipdb.set_trace()
 
+        if self.oauth_version == 2 and self.address_new_oauth2_token():
+            return self._basic_call(
+                request_type, url, data=original_data,
+                **original_params)
+                    
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
                 rj = response.json()
@@ -262,15 +288,36 @@ class QBS(object):
         except:
             error_message = response.text
 
-        if self.oauth_version == 2:
-            if response.status_code == 401:
-                # currently, the infrastructure that might call _basic_call()
-                # does not support saving new refresh tokens if OOB is called in this
-                # state. So we need to start fresh with no refresh token
-                raise ConnectionRefusedError("QBS._basic_call failed with 401; need new refresh token. "+
-                      "Delete refresh token and re-instantiate QBS")
-        raise ConnectionRefusedError(error_message)
+        raise ConnectionError(error_message)
 
+    def address_new_oauth2_token(self):
+        if not self.qba.new_token:
+            return False
+        
+        self.exa = str(
+            datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
+        self.cid = self.qba.realm_id
+        self.at  = self.qba.access_token
+        self.rt  = self.qba.refresh_token
+        if not self.ntcbf is None:
+            # Make the callback (if available)
+            self.ntcbf({
+                "access_token"  : self.at,
+                "refresh_token" : self.rt,
+                "expires_at"    : self.exa,
+                "company_id"    : self.cid})
+
+            self.qba.new_token = False
+
+        else:
+            if self.vb > 1:
+                print("You're refresh token and access token are new.",
+                      "Store the new credentials!")
+
+        return True
+
+        
+                    
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
         where_tail example: WHERE Active IN (true,false) ... the syntax is
