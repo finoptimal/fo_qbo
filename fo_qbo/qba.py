@@ -328,7 +328,8 @@ class QBAuth2():
         
         if self.refresh_token is None:
             if self.vb < 8:
-                print("Rerun with verbosity >= 8 to request access!")
+                if self.vb > 1:
+                    print("Rerun with verbosity >= 8 to request access!")
                 self._has_access = False
                 return self._has_access
             self.oob()
