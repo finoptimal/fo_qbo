@@ -8,7 +8,6 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 """
-from __future__ import print_function
 
 from rauth       import OAuth1Session
 from base64      import b64encode
@@ -349,6 +348,8 @@ class QBS(object):
             if self.vb > 7:
                 print(query)
             resp = self._basic_call("POST", url, data=query)
+            if self.vb > 9:
+                print(json.dumps(resp, indent=4))
 
             if not resp or not "QueryResponse" in resp:
                 if self.vb > 1:
@@ -366,8 +367,18 @@ class QBS(object):
                 return resp["QueryResponse"]["totalCount"]
 
             objs           = resp["QueryResponse"].get(object_type, [])
-            start_position = resp["QueryResponse"].get("startPosition", 0)
-            max_results    = resp["QueryResponse"].get("maxResults", 0)
+            start_position = resp["QueryResponse"].get("startPosition")
+            if start_position is None:
+                # We started seeing null responses for this attribute on
+                #  2019-06-14 (instead of the attribute just not being
+                #  present prior to that)
+                start_position = 0
+            max_results    = resp["QueryResponse"].get("maxResults")
+            if max_results is None:
+                # We started seeing null responses for this attribute on
+                #  2019-06-14 (instead of the attribute just not being
+                #  present prior to that)
+                max_results = 0
 
             all_objs      += objs
 
@@ -379,6 +390,7 @@ class QBS(object):
             if max_results < 1000:
                 queried_all = True
 
+            # This will be the NEXT query:
             query = query[:base_len] + " STARTPOSITION {}".format(
                 start_position + 1000)
 
