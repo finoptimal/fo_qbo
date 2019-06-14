@@ -257,10 +257,20 @@ class QBS(object):
                 print("inspect request_type, url, headers, data, and params:")
                 import ipdb;ipdb.set_trace()
 
+        self.last_call = {
+            "request_type" : request_type.upper(),
+            "url"          : url,
+            "realm"        : self.cid,
+            "header"       : headers,
+            "data"         : data,
+            "params"       : params}
+                
         response = self.qba.request(
             request_type.upper(), url, header_auth=True, realm=self.cid,
             verify=True, headers=headers, data=data, **params)
 
+        self.last_response = response
+        
         if self.vb > 7:
             print("The final URL (with params):")
             print(response.url)
