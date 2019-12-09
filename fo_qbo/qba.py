@@ -44,7 +44,8 @@ class QBAuth(object):
 
         # lets instantiator know to store new persistent data (if applicable)
         self.new_token           = False
-
+        self.new_access_token    = False
+        
         self.session = None  # until setup is complete
 
         self._setup()
@@ -264,6 +265,7 @@ class QBAuth2():
 
         self.session             = None
         self.new_token           = False
+        self.new_refresh_token   = False
         self.callback_url        = callback_url
 
         self._setup()
@@ -385,7 +387,8 @@ class QBAuth2():
             print("\nThis company's (realm) ID: {}".format(self.realm_id))
             print("     new refresh token:", self.session.refresh_token)
             print("     new access token:", self.session.access_token, "\n")
-        self.new_token     = True
+        self.new_token         = True
+        self.new_refresh_token = True
 
     def refresh(self):
         if self.vb > 2:
@@ -400,7 +403,6 @@ class QBAuth2():
     def disconnect(self):
         print(f"Disconnecting {self.realm_id}'s access token!") 
         resp = self.session.revoke(token=self.refresh_token)
-        raise NotImplementedError()
         
     def __repr__(self):
         return "<QBAuth (Oauth Version 2)>"
