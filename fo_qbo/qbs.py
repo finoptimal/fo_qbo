@@ -1,13 +1,11 @@
-"""
-Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as
- xml, but this wrapper ONLY supports json-formatted messages.
+# Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as
+#  xml, but this wrapper ONLY supports json-formatted messages.
 
-https://developer.intuit.com/docs/api/accounting
-https://developer.intuit.com/docs/0100_accounting/0400_references/reports
-https://developer.intuit.com/v2/apiexplorer
+# https://developer.intuit.com/docs/api/accounting
+# https://developer.intuit.com/docs/0100_accounting/0400_references/reports
+# https://developer.intuit.com/v2/apiexplorer
 
-Please contact developer@finoptimal.com with questions or comments.
-"""
+# Please contact developer@finoptimal.com with questions or comments.
 
 from rauth       import OAuth1Session
 from base64      import b64encode
@@ -71,7 +69,7 @@ class QBS(object):
             access_token=None, access_token_secret=None, company_id=None,
             callback_url=None, expires_on=None, expires_at=None,
             new_token_callback_function=None, minor_api_version=None,
-            migrate=False, verbosity=0):
+            rt_acquired_at=None, verbosity=0):
         """
         You must have (developer) consumer credentials (key + secret) to use
          this module.
@@ -88,11 +86,7 @@ class QBS(object):
          we first connect or when we reconnect, getting a new access token
          in either case.
 
-        If migrate, you must pass ALL OAuth1 credentials (including a valid
-         access token) AND OAuth2 client credentials (without a refresh token,
-         obviously.
         """
-        self.migrate = migrate
         if not access_token_secret is None:
             # If there is no active OAuth1 access_tokens (and presumably, then,
             #  no access_token_secret), we use OAuth2. The deprecated Py2
@@ -114,6 +108,7 @@ class QBS(object):
         self.cls   = client_secret
         self.rt    = refresh_token
         self.exa   = expires_at
+        self.rtaa  = rt_acquired_at
         self.ntcbf = new_token_callback_function
 
         # Oauth 1 & Oauth2
@@ -144,23 +139,12 @@ class QBS(object):
             self.qba  = QBAuth(
                 self.ck, self.cs, access_token=self.at,
                 access_token_secret=self.ats, expires_on=self.exo,
-                verbosity=self.vb)
-            
-            if self.migrate:
-                self.oauth_version = 2
-                if not self.at is None:
-                    # The Intuit migration function fails, so just disconnect
-                    #  OAuth1 access_token and create an OAuth2 one.
-                    if self.vb < 8:
-                        print("Rerun with verbosity >= 8 to migrate!")
-                        return
-                    self.qba.disconnect()
-                    return self._setup()
+                verbosity=self.vb)            
 
         if self.oauth_version == 2:
             if self.vb > 5:
                 print("Using OAuth 2")
-
+                
             if not self.exa is None:
                 if self.exa < str(datetime.datetime.utcnow()):
                     if self.vb > 2:
@@ -190,7 +174,7 @@ class QBS(object):
             if self.vb > 1:
                 print(f"New access token et al for company id {self.cid}.")
                 print("Don't forget to store it!")
-                
+
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
         """
@@ -314,13 +298,22 @@ class QBS(object):
         self.cid = self.qba.realm_id
         self.at  = self.qba.access_token
         self.rt  = self.qba.refresh_token
+
+        updater  = {
+            "access_token"  : self.at,
+            "refresh_token" : self.rt,
+            "expires_at"    : self.exa,
+            "company_id"    : self.cid
+        }
+
+        if self.qba.new_refresh_token:
+            # In case we actually need to re-authorize after a year,
+            #  let's know when we got the refresh token
+            updater["rt_acquired_at"] = str(datetime.datetime.utcnow())
+
         if not self.ntcbf is None:
             # Make the callback (if available)
-            self.ntcbf({
-                "access_token"  : self.at,
-                "refresh_token" : self.rt,
-                "expires_at"    : self.exa,
-                "company_id"    : self.cid})
+            self.ntcbf(updater)
 
             self.qba.new_token = False
 
