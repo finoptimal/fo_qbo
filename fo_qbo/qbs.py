@@ -285,6 +285,12 @@ class QBS(object):
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
                 rj = response.json()
+
+                if self.vb > 10:
+                    print(json.dumps(rj, indent=4))
+                    if self.vb > 14:
+                        import ipdb;ipdb.set_trace()
+                
                 self.last_call_time = rj.get("time")
                 return rj
             elif headers.get("content-type") == "application/pdf":
