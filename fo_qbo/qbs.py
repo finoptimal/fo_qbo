@@ -7,12 +7,11 @@
 
 # Please contact developer@finoptimal.com with questions or comments.
 
-from rauth       import OAuth1Session
 from base64      import b64encode
 
 import datetime, json, os, requests, textwrap, time, traceback
 
-from .qba        import QBAuth, QBAuth2
+from .qba        import QBAuth2
 from .mime_types import MIME_TYPES
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
@@ -133,13 +132,7 @@ class QBS(object):
          connect workflow.
         """
         if self.oauth_version == 1:
-            if self.vb > 5:
-                print("Using OAuth 1")
-
-            self.qba  = QBAuth(
-                self.ck, self.cs, access_token=self.at,
-                access_token_secret=self.ats, expires_on=self.exo,
-                verbosity=self.vb)            
+            raise Exception("No more OAuth1!")
 
         if self.oauth_version == 2:
             if self.vb > 5:
