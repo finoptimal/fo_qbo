@@ -312,11 +312,19 @@ class QBAuth2():
             
         if self.vb > 19:
             print("QBA headers", _headers)
-            
+
         response = requests.request(
             request_type.upper(), url, headers=_headers, data=data, **params)
         
         if response.status_code == 401:
+            if not hasattr(self, "_attempts"):
+                self._attempts  = 1
+            else:
+                self._attempts += 1
+
+            if self._attempts > 3:
+                raise Exception(response.text)
+                
             self.refresh()
             
         if self.vb > 10:
