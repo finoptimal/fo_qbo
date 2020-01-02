@@ -98,10 +98,6 @@ class QBS(object):
             raise ValueError(
                 "Could not create connection to QB API, not enough credentials")
 
-        # Oauth 1
-        self.ck  = consumer_key
-        self.cs  = consumer_secret
-
         # Oauth 2
         self.cli   = client_id
         self.cls   = client_secret
@@ -109,15 +105,9 @@ class QBS(object):
         self.exa   = expires_at
         self.rtaa  = rt_acquired_at
         self.ntcbf = new_token_callback_function
-
-        # Oauth 1 & Oauth2
         self.at  = access_token
         self.cid = company_id
         
-        # Oauth 1:
-        self.ats = access_token_secret
-        self.exo = expires_on
-
         self.cbu = callback_url
         
         self.mav = minor_api_version
