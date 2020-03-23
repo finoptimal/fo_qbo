@@ -62,29 +62,18 @@ class QBS(object):
     def __init__(
             self,
             # oauth 1:
-            consumer_key=None, consumer_secret=None,
+            consumer_key=None, consumer_secret=None, expires_on=None,
             # oauth 2
             client_id=None, client_secret=None, refresh_token=None, 
             access_token=None, access_token_secret=None, company_id=None,
-            callback_url=None, expires_on=None, expires_at=None,
+            callback_url=None, expires_at=None,
             new_token_callback_function=None, minor_api_version=None,
-            rt_acquired_at=None, verbosity=0):
+            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0):
         """
-        You must have (developer) consumer credentials (key + secret) to use
-         this module.
+        This only works with a single company_id at a time.
 
-        It only works with a single company_id at a time.
-
-        If using OAuth 1, you must pass in a consumer_key and consumer_secret,
-        and access token + secret to bypass OOB authentication.
-
-        If using OAuth 2, you must pass in a client_id and client_secret, or
+        You must pass in a client_id and client_secret, or
         a refresh_token to bypass OOB authentication.
-
-        connector_callback and reconnector_callback are what happens when
-         we first connect or when we reconnect, getting a new access token
-         in either case.
-
         """
         if not access_token_secret is None:
             # If there is no active OAuth1 access_tokens (and presumably, then,
@@ -105,13 +94,14 @@ class QBS(object):
         self.exa   = expires_at
         self.rtaa  = rt_acquired_at
         self.ntcbf = new_token_callback_function
-        self.at  = access_token
-        self.cid = company_id
+        self.at    = access_token
+        self.cid   = company_id
+        self.rlc   = reload_credentials_callback
         
-        self.cbu = callback_url
+        self.cbu   = callback_url
         
-        self.mav = minor_api_version
-        self.vb  = verbosity
+        self.mav   = minor_api_version
+        self.vb    = verbosity
 
         self._setup()
 
@@ -121,28 +111,21 @@ class QBS(object):
          access_token (and, of course, accompanying secret), go through the
          connect workflow.
         """
-        if self.oauth_version == 1:
-            raise Exception("No more OAuth1!")
+        if not self.exa is None:
+            if self.exa < str(datetime.datetime.utcnow()):
+                if self.vb > 2:
+                    print(f"\n{self.cid}'s access_token has expired;",
+                          "not passing to QBA.\n")
+                self.at = None
 
-        if self.oauth_version == 2:
-            if self.vb > 5:
-                print("Using OAuth 2")
-                
-            if not self.exa is None:
-                if self.exa < str(datetime.datetime.utcnow()):
-                    if self.vb > 2:
-                        print(f"\n{self.cid}'s access_token has expired;",
-                              "not passing to QBA.\n")
-                    self.at = None
-                
-            self.qba = QBAuth2(
-                self.cli, self.cls, realm_id=self.cid,
-                refresh_token=self.rt, access_token=self.at,
-                callback_url=self.cbu, verbosity=self.vb)
+        self.qba = QBAuth2(
+            self.cli, self.cls, realm_id=self.cid,
+            refresh_token=self.rt, access_token=self.at,
+            callback_url=self.cbu, verbosity=self.vb)
 
-            if self.cid is None:
-                self.qba.establish_access()
-                self.address_new_oauth2_token()
+        if self.cid is None:
+            self.qba.establish_access()
+            self.address_new_oauth2_token()
                 
         if self.qba.session is None:
             if self.vb > 1:
@@ -157,6 +140,23 @@ class QBS(object):
             if self.vb > 1:
                 print(f"New access token et al for company id {self.cid}.")
                 print("Don't forget to store it!")
+
+    def _reload_credentials(self):
+        """
+        Addresses a situation where another process refreshes while this
+         process is still using these old creds. In such a situation, the 
+         refresh operation will fail, and we need to get new creds from the
+         QBS instantiator.
+        """
+        if self.vb > 2:
+            print(f"Reloading {self} credentials!")
+
+        # Reset this objects cred attrs...
+        self._reload_credentials_callback()
+
+        # Propagate the new creds to the QBA object...
+        for attr in ["refresh_token", "access_token"]:
+            setattr(self.qbs, attr, getattr(self, attr))
 
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
@@ -230,11 +230,35 @@ class QBS(object):
             "header"       : headers,
             "data"         : data,
             "params"       : params}
-                
-        response = self.qba.request(
-            request_type.upper(), url, header_auth=True, realm=self.cid,
-            verify=True, headers=headers, data=data, **params)
 
+
+        established_access = False
+        tries_remaining    = 2
+        while not established_access:
+            # Handle a situation where one instance loads up credentials that
+            #  an earlier instance is ABOUT to blow away (because of a token
+            #  refresh).
+            try:
+                self.qba.establish_access()
+                break
+            
+            except:
+                if not hasattr(self.qba, "refresh_failure"):
+                    raise
+                
+                if self.qba.refresh_failure:
+                    tries -= 1
+                    self._reload_credentials()
+
+                if tries > 0:
+                    continue
+
+                raise   
+                    
+        response = self.qba.request(
+                request_type.upper(), url, header_auth=True, realm=self.cid,
+                verify=True, headers=headers, data=data, **params)
+        
         self.last_response = response
         
         if self.vb > 7:
