@@ -247,10 +247,10 @@ class QBS(object):
                     raise
                 
                 if self.qba.refresh_failure:
-                    tries -= 1
+                    tries_remaining -= 1
                     self._reload_credentials()
 
-                if tries > 0:
+                if tries_remaining > 0:
                     continue
 
                 raise   
