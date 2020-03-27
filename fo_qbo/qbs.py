@@ -151,8 +151,11 @@ class QBS(object):
         if self.vb > 2:
             print(f"Reloading {self} credentials!")
 
+        if self.rlc is None:
+            raise Exception("Got no function at instantiation...")
+            
         # Reset this objects cred attrs...
-        self._reload_credentials_callback()
+        self.rlc()
 
         # Propagate the new creds to the QBA object...
         for attr in ["refresh_token", "access_token"]:
