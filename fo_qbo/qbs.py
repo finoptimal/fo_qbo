@@ -159,7 +159,7 @@ class QBS(object):
 
         # Propagate the new creds to the QBA object...
         for attr in ["refresh_token", "access_token"]:
-            setattr(self.qbs, attr, getattr(self, attr))
+            setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
     def _basic_call(self, request_type, url, data=None, **params):
