@@ -626,6 +626,10 @@ class QBS(object):
         att       = self.read("Attachable", attachable_id)["Attachable"]
         link      = att["TempDownloadUri"]
         fn        = att["FileName"]
+
+        if os.path.isdir(path):
+            path = os.path.join(path, fn)
+        
         loc, name = os.path.split(path)
 
         if not name:
