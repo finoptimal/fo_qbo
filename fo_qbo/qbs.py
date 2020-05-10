@@ -629,7 +629,7 @@ class QBS(object):
 
         if os.path.isdir(path):
             path = os.path.join(path, fn)
-        
+            
         loc, name = os.path.split(path)
 
         if not name:
