@@ -474,6 +474,15 @@ class QBS(object):
         return self._basic_call(
             "POST", url, data=skinny_dict, params={"operation" : "delete"})
 
+    def batch(self, items):
+        """
+        https://developer.intuit.com/app/developer/qbo/docs/api/
+         accounting/all-entities/batch
+        """
+        url = f"{self.API_BASE_URL}/{self.cid}/batch"
+        return self._basic_call(
+            "POST", url, data={"BatchItemRequest" : items})
+    
     def change_data_capture(self, utc_since, object_types):
         """
         https://developer.intuit.com/docs/api/accounting/ChangeDataCapture
@@ -482,10 +491,6 @@ class QBS(object):
 
         object_types should be a list, e.g.
          ["Purchase", "JournalEntry", "Vendor"]
-
-        Watch out for the deletion bug on JournalEntry...it won't tell you about
-         deleted JournalEntry objects! QBO-94274 is the bug number (though it's
-         not listed in the API documentation's known issues).
         """
         url = "{}/{}/cdc".format(self.API_BASE_URL, self.cid)
 
@@ -672,6 +677,6 @@ class QBS(object):
 
         return self._basic_call(
             "POST", url, **{"params" : {"params" : {"sendTo" : recipient}}})
-
+        
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
