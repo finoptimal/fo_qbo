@@ -87,6 +87,7 @@ if __name__=='__main__':
     start = time.time()
     args = parser.parse_args()
 
+    raise Exception("Update test script for Oauth2!")
     sesh = fo_qbo.QBS(
         args.consumer_creds[0], args.consumer_creds[1],
         access_token=args.access_token_creds[0],

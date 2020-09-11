@@ -9,7 +9,7 @@
 
 from base64      import b64encode
 
-import datetime, json, os, requests, textwrap, time, traceback
+import collections, datetime, json, os, requests, textwrap, time, traceback
 
 from .qba        import QBAuth2
 from .mime_types import MIME_TYPES
@@ -263,6 +263,13 @@ class QBS(object):
                 verify=True, headers=headers, data=data, **params)
         
         self.last_response = response
+
+        if not hasattr(self, "tids"):
+            self.resps = collections.OrderedDict()
+
+        # For troubleshooting
+        self.resps[response.headers["intuit_tid"]] = (
+            response.request.url, response.request.body, response)
         
         if self.vb > 7:
             print("The final URL (with params):")
