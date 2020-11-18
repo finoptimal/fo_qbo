@@ -530,14 +530,16 @@ class QBS(object):
         raw = self._basic_call("GET", url, **{"params" : params})
 
         if not raw:
-            print("No json-formatted {} {} report to start with. rp_params:".\
-                format(self.cid, report_name))
-            print(json.dumps(params, indent=4))
-            raise Exception()
+            msg = "\n\n".join([
+                "No json-formatted {} {} report to start with. rp_params:".\
+                format(self.cid, report_name),
+                json.dumps(params, indent=4)])
+            raise Exception(msg)
         elif not "Header" in list(raw.keys()):
-            print(json.dumps(raw, indent=4))
-            print("No Header item in raw (above)!?")
-            raise Exception()
+            msg = "\n\n".join([
+                json.dumps(raw, indent=4),
+                f"No Header item in {self.cid} {report_name} raw (above)!?"])
+            raise Exception(msg)
 
         if self.vb > 7:
             print(json.dumps(raw["Header"], indent=4))
