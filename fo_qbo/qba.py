@@ -108,6 +108,7 @@ class QBAuth2():
                 
             try:
                 self.refresh()
+                
             except Exception as exc:
                 #print("\n Couldn't refresh access_token / refresh_token:", exc)
                 self.refresh_failure = True
