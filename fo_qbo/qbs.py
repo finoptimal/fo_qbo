@@ -341,7 +341,9 @@ class QBS(object):
 
         return True
 
-        
+    ALIASES = {
+        "CreditCardPayment" : "CreditCardPaymentTxn", # Why, Intuit?!
+    }    
                     
     def query(self, object_type, where_tail=None, count_only=False, **params):
         """
@@ -392,7 +394,8 @@ class QBS(object):
             if count_only:
                 return resp["QueryResponse"]["totalCount"]
 
-            objs           = resp["QueryResponse"].get(object_type, [])
+            alias          = self.ALIASES.get(object_type, object_type)
+            objs           = resp["QueryResponse"].get(alias, [])
             start_position = resp["QueryResponse"].get("startPosition")
             if start_position is None:
                 # We started seeing null responses for this attribute on
@@ -624,6 +627,7 @@ class QBS(object):
             "request_body" : request_body
         }
 
+        
         return self._basic_call("POST", url, data=data)
 
     def download(self, attachable_id, path):
