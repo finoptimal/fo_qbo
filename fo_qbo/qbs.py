@@ -550,6 +550,9 @@ class QBS(object):
 
         return raw
 
+    BAD_CHARS = {
+        '\u2010' : "-",
+    }
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
                include_on_send=False):
@@ -622,6 +625,12 @@ class QBS(object):
         ).format(boundary, "metadata.json", json.dumps(jd, indent=0),
                  boundary, name, mime_type, len(binary_data),
                  binary_data.decode('utf-8'), boundary)
+
+        for ky, vl in self.BAD_CHARS.items():
+            # See https://stackoverflow.com/questions/41030128/
+            #  str-encoding-from-latin-1-to-utf-8-arbitrarily
+            request_body = request_body.replace(ky, vl)
+        
         data = {
             "headers"      : headers.copy(),
             "request_body" : request_body
