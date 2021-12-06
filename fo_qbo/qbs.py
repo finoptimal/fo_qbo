@@ -264,7 +264,7 @@ class QBS(object):
         
         self.last_response = response
 
-        if not hasattr(self, "tids"):
+        if not hasattr(self, "resps"):
             self.resps = collections.OrderedDict()
 
         # For troubleshooting
@@ -345,16 +345,14 @@ class QBS(object):
         "CreditCardPayment" : "CreditCardPaymentTxn", # Why, Intuit?!
     }    
                     
-    def query(self, object_type, where_tail=None, count_only=False, **params):
+    def query(self, object_type, where_tail=None, count_only=False,
+              start_position=None, per_page=1000):
         """
         where_tail example: WHERE Active IN (true,false) ... the syntax is
          SQLike and documented in Intuit's documentation.
 
         Handles pagination, because that's just no fun at all.
         """
-        if len(params) > 0:
-            raise NotImplementedError()
-
         queried_all = False
 
         select_what = "COUNT(*)" if count_only else "*"
@@ -362,8 +360,11 @@ class QBS(object):
             where_tail = " " + where_tail
         else:
             where_tail = ""
-        query       = "SELECT {} FROM {}{} MAXRESULTS 1000".format(
-            select_what, object_type, where_tail)
+        query       = "SELECT {} FROM {}{} MAXRESULTS {}".format(
+            select_what, object_type, where_tail, per_page)
+        if not start_position is None:
+            query  += f" STARTPOSITION {start_position}"
+            
         url = "{}/{}/query".format(self.API_BASE_URL, self.cid)
 
         all_objs = []
@@ -416,12 +417,12 @@ class QBS(object):
                     object_type, start_position,
                     start_position + max_results - 1))
 
-            if max_results < 1000:
+            if max_results < per_page:
                 queried_all = True
 
             # This will be the NEXT query:
             query = query[:base_len] + " STARTPOSITION {}".format(
-                start_position + 1000)
+                start_position + per_page)
 
         return all_objs
 
