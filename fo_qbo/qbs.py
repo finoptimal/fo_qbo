@@ -553,6 +553,7 @@ class QBS(object):
     BAD_CHARS = {
         '\u2010' : "-",
         '\u2013' : "-",
+        '\uff0c' : ", "
     }
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
