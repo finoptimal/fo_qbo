@@ -16,7 +16,7 @@ from .mime_types import MIME_TYPES
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
-def retry(max_tries=3, delay_secs=0.2):
+def retry(max_tries=0, delay_secs=0.2):
     """
     Produces a decorator which tries effectively the function it decorates
      a given number of times. Because the QBO API has been known to respond
