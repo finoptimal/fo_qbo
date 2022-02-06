@@ -179,7 +179,7 @@ class QBS(LoggedClass):
             setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
@@ -339,7 +339,7 @@ class QBS(LoggedClass):
 
         raise ConnectionError(error_message)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def address_new_oauth2_token(self):
         if not self.qba.new_token:
             return False
@@ -379,7 +379,7 @@ class QBS(LoggedClass):
         "CreditCardPayment": "CreditCardPaymentTxn",  # Why, Intuit?!
     }
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def query(self, object_type, where_tail=None, count_only=False,
               start_position=None, per_page=1000):
         """
@@ -471,7 +471,7 @@ class QBS(LoggedClass):
 
         return all_objs
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def create(self, object_type, object_dict, **params):
         """
         The object type isn't actually included in the object_dict, which is
@@ -481,7 +481,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=object_dict, **params)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def read(self, object_type, object_id, **params):
         """
         Just returns a single object, no questions asked.
@@ -492,7 +492,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="GET", url=url)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def update(self, object_type, object_dict, **params):
         """
         Unlike with the delete method, you really have to provide the update
@@ -506,7 +506,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=object_dict)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def delete(self, object_type, object_id=None, object_dict=None, **params):
         """
         Either provide an object_dict (which will simply be handed to the API
@@ -532,7 +532,7 @@ class QBS(LoggedClass):
                                 data=skinny_dict,
                                 params={"operation": "delete"})
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def batch(self, items):
         """
         https://developer.intuit.com/app/developer/qbo/docs/api/
@@ -544,7 +544,7 @@ class QBS(LoggedClass):
                                 url=url,
                                 data={"BatchItemRequest": items})
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def change_data_capture(self, utc_since, object_types):
         """
         https://developer.intuit.com/docs/api/accounting/ChangeDataCapture
@@ -572,7 +572,7 @@ class QBS(LoggedClass):
         #  a specific response...
         return self._basic_call(request_type="GET", url=url, params=params)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def report(self, report_name, **params):
         """
         Use the QBO reporting API, documented here:
@@ -608,7 +608,7 @@ class QBS(LoggedClass):
         '\uff0c' : ", "
     }
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
                include_on_send=False):
@@ -694,7 +694,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=data)
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
@@ -729,7 +729,7 @@ class QBS(LoggedClass):
 
         return path  # Because this may have changed if a directory was passed in
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def get_pdf(self, object_type, object_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/invoice
@@ -747,7 +747,7 @@ class QBS(LoggedClass):
 
         return link
 
-    @logger.timeit(level=logging.INFO)
+    @logger.timeit(level=logging.DEBUG)
     def send(self, object_type, object_id, recipient):
         """
         https://developer.intuit.com/docs/api/accounting/invoice
