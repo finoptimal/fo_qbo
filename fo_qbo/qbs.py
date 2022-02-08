@@ -1,22 +1,34 @@
-# Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as
-#  xml, but this wrapper ONLY supports json-formatted messages.
+"""
+Wrap the QBO v3 (and hopefully v4) REST API. The API supports json as well as
+xml, but this wrapper ONLY supports json-formatted messages.
 
-# https://developer.intuit.com/docs/api/accounting
-# https://developer.intuit.com/docs/0100_accounting/0400_references/reports
-# https://developer.intuit.com/v2/apiexplorer
+https://developer.intuit.com/docs/api/accounting
+https://developer.intuit.com/docs/0100_accounting/0400_references/reports
+https://developer.intuit.com/v2/apiexplorer
 
-# Please contact developer@finoptimal.com with questions or comments.
+Please contact developer@finoptimal.com with questions or comments.
 
-from base64      import b64encode
+Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
+"""
+import collections
+import datetime
+import json
+import logging
+import os
+import requests
+import textwrap
+import time
+from base64 import b64encode
 
-import collections, datetime, json, os, requests, textwrap, time, traceback
-
-from .qba        import QBAuth2
+from finoptimal.logging import LoggedClass, get_logger
 from .mime_types import MIME_TYPES
+from .qba import QBAuth2
+
+logger = get_logger(__name__)
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
-def retry(max_tries=3, delay_secs=0.2):
+def retry(max_tries=2, delay_secs=0.2):
     """
     Produces a decorator which tries effectively the function it decorates
      a given number of times. Because the QBO API has been known to respond
@@ -43,15 +55,18 @@ def retry(max_tries=3, delay_secs=0.2):
                 except Exception as exc:
                     tries    -= 1
                     attempts += 1
+
                     if tries <= 0:
                         raise
+
                     # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
 
         return inner
     return decorator
 
-class QBS(object):
+
+class QBS(LoggedClass):
     """
     Basic wrapper, with auth functionality broken out into the QBA class
     """
@@ -75,13 +90,13 @@ class QBS(object):
         You must pass in a client_id and client_secret, or
         a refresh_token to bypass OOB authentication.
         """
-        if not access_token_secret is None:
+        if access_token_secret is not None:
             # If there is no active OAuth1 access_tokens (and presumably, then,
             #  no access_token_secret), we use OAuth2. The deprecated Py2
             #  version of this wrapper is the only way to still get OAuth1
             #  access tokens (which will become impossible in December, 2019)
             self.oauth_version = 1
-        elif not client_id is None  and not client_secret   is None:
+        elif client_id is not None and client_secret is not None:
             self.oauth_version = 2
         else:
             raise ValueError(
@@ -111,11 +126,11 @@ class QBS(object):
          access_token (and, of course, accompanying secret), go through the
          connect workflow.
         """
-        if not self.exa is None:
+        if self.exa is not None:
             if self.exa < str(datetime.datetime.utcnow()):
                 if self.vb > 2:
-                    print(f"\n{self.cid}'s access_token has expired;",
-                          "not passing to QBA.\n")
+                    self.print(f"\n{self.cid}'s access_token has expired;",
+                               "not passing to QBA.\n")
                 self.at = None
 
         self.qba = QBAuth2(
@@ -129,17 +144,19 @@ class QBS(object):
                 
         if self.qba.session is None:
             if self.vb > 1:
-                print("QBS has no working access token!")
+                self.print("QBS has no working access token!")
                 if self.vb > 8:
-                    print("Inspect self.qba, the QBAuth object:")
-                    import ipdb;ipdb.set_trace()
+                    self.print("Inspect self.qba, the QBAuth object:")
+                    import ipdb
+                    ipdb.set_trace()
 
         if self.qba.new_token and self.oauth_version == 1:
             if self.cid is None:
                 self.cid = self.qba.realm_id
+
             if self.vb > 1:
-                print(f"New access token et al for company id {self.cid}.")
-                print("Don't forget to store it!")
+                self.print(f"New access token et al for company id {self.cid}.")
+                self.print("Don't forget to store it!")
 
     def _reload_credentials(self):
         """
@@ -149,7 +166,7 @@ class QBS(object):
          QBS instantiator.
         """
         if self.vb > 2:
-            print(f"Reloading {self} credentials!")
+            self.print(f"Reloading {self} credentials!")
 
         if self.rlc is None:
             raise Exception("Got no function at instantiation...")
@@ -162,11 +179,12 @@ class QBS(object):
             setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
+    @logger.timeit(level=logging.DEBUG)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
         """
-        headers  = {"accept" : "application/json"}
+        headers  = {"accept": "application/json"}
 
         """
         if not "minorversion" in url and not self.mav is None:
@@ -174,13 +192,15 @@ class QBS(object):
         """
         original_params = params.copy()
         original_data   = None
+
         if isinstance(data, str):
             original_data = data + ""
             
-        if not "minorversion" in params.get("params", {}) and \
-           not self.mav is None:
-            if not "params" in params:
+        if "minorversion" not in params.get("params", {}) and \
+           self.mav is not None:
+            if "params" not in params:
                 params["params"] = {}
+
             params["params"]["minorversion"] = str(int(self.mav))
 
         if "download" in url:
@@ -198,7 +218,7 @@ class QBS(object):
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
                     data    = data["request_body"] + ""    # should be text
-                    #data    = data["request_body"].encode("utf-8")
+                    # data    = data["request_body"].encode("utf-8")
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
@@ -208,23 +228,26 @@ class QBS(object):
 
         if self.vb > 7:
             if isinstance(data, dict) or not data:
-                print(json.dumps(data, indent=4))
+                self.print(json.dumps(data, indent=4))
             else:
                 if len(data) > 1500:
-                    print("First 500 characters of data:")
-                    print(data[:750])
-                    print("\n...\n")
-                    print(data[-750:])
+                    self.print("First 500 characters of data:")
+                    self.print(data[:750])
+                    self.print("\n...\n")
+                    self.print(data[-750:])
                 else:
-                    print(data)
-            print("Above is the request body about to go here:")
-            print(url)
-            print("Below are the call's params and then headers:")
-            print(json.dumps(params, indent=4))
-            print(json.dumps(headers, indent=4))
+                    self.print(data)
+
+            self.print("Above is the request body about to go here:")
+            self.print(url)
+            self.print("Below are the call's params and then headers:")
+            self.print(json.dumps(params, indent=4))
+            self.print(json.dumps(headers, indent=4))
+
             if self.vb > 19:
-                print("inspect request_type, url, headers, data, and params:")
-                import ipdb;ipdb.set_trace()
+                self.print("inspect request_type, url, headers, data, and params:")
+                import ipdb
+                ipdb.set_trace()
 
         self.last_call = {
             "request_type" : request_type.upper(),
@@ -234,9 +257,9 @@ class QBS(object):
             "data"         : data,
             "params"       : params}
 
-
         established_access = False
         tries_remaining    = 2
+
         while not established_access:
             # Handle a situation where one instance loads up credentials that
             #  an earlier instance is ABOUT to blow away (because of a token
@@ -244,7 +267,6 @@ class QBS(object):
             try:
                 self.qba.establish_access()
                 break
-            
             except:
                 if not hasattr(self.qba, "refresh_failure"):
                     raise
@@ -259,8 +281,14 @@ class QBS(object):
                 raise   
                     
         response = self.qba.request(
-                request_type.upper(), url, header_auth=True, realm=self.cid,
-                verify=True, headers=headers, data=data, **params)
+            request_type.upper(),
+            url,
+            header_auth=True,
+            realm=self.cid,
+            verify=True,
+            headers=headers,
+            data=data,
+            **params)
         
         self.last_response = response
 
@@ -272,25 +300,30 @@ class QBS(object):
             response.request.url, response.request.body, response)
         
         if self.vb > 7:
-            print("The final URL (with params):")
-            print(response.url)
+            self.print("The final URL (with params):")
+            self.print(response.url)
+
             if self.vb > 15:
-                print("inspect response:")
-                import ipdb;ipdb.set_trace()
+                self.print("inspect response:")
+                import ipdb
+                ipdb.set_trace()
 
         if self.oauth_version == 2 and self.address_new_oauth2_token():
-            return self._basic_call(
-                request_type, url, data=original_data,
-                **original_params)
+            return self._basic_call(request_type=request_type,
+                                    url=url,
+                                    data=original_data,
+                                    **original_params)
                     
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
                 rj = response.json()
 
                 if self.vb > 10:
-                    print(json.dumps(rj, indent=4))
+                    self.print(json.dumps(rj, indent=4))
+
                     if self.vb > 14:
-                        import ipdb;ipdb.set_trace()
+                        import ipdb
+                        ipdb.set_trace()
                 
                 self.last_call_time = rj.get("time")
                 return rj
@@ -306,6 +339,7 @@ class QBS(object):
 
         raise ConnectionError(error_message)
 
+    @logger.timeit(level=logging.DEBUG)
     def address_new_oauth2_token(self):
         if not self.qba.new_token:
             return False
@@ -328,7 +362,7 @@ class QBS(object):
             #  let's know when we got the refresh token
             updater["rt_acquired_at"] = str(datetime.datetime.utcnow())
 
-        if not self.ntcbf is None:
+        if self.ntcbf is not None:
             # Make the callback (if available)
             self.ntcbf(updater)
 
@@ -336,15 +370,16 @@ class QBS(object):
 
         else:
             if self.vb > 1:
-                print("You're refresh token and access token are new.",
-                      "Store the new credentials!")
+                self.print("You're refresh token and access token are new.",
+                           "Store the new credentials!")
 
         return True
 
     ALIASES = {
-        "CreditCardPayment" : "CreditCardPaymentTxn", # Why, Intuit?!
-    }    
-                    
+        "CreditCardPayment": "CreditCardPaymentTxn",  # Why, Intuit?!
+    }
+
+    @logger.timeit(level=logging.DEBUG)
     def query(self, object_type, where_tail=None, count_only=False,
               start_position=None, per_page=1000):
         """
@@ -356,40 +391,47 @@ class QBS(object):
         queried_all = False
 
         select_what = "COUNT(*)" if count_only else "*"
+
         if where_tail:
             where_tail = " " + where_tail
         else:
             where_tail = ""
-        query       = "SELECT {} FROM {}{} MAXRESULTS {}".format(
-            select_what, object_type, where_tail, per_page)
+
+        query       = f"SELECT {select_what} FROM {object_type}{where_tail} MAXRESULTS {per_page}"
+
         if not start_position is None:
             query  += f" STARTPOSITION {start_position}"
             
-        url = "{}/{}/query".format(self.API_BASE_URL, self.cid)
+        url = f"{self.API_BASE_URL}/{self.cid}/query"
 
         all_objs = []
 
         if object_type in self.UNQUERIABLE_OBJECT_TYPES:
-            raise Exception("Can't query QB {} objects!".format(object_type))
+            raise Exception(f"Can't query QB {object_type} objects!")
 
         base_len = len(query)
+
         while not queried_all:
             if self.vb > 7:
-                print(query)
-            resp = self._basic_call("POST", url, data=query)
-            if self.vb > 9:
-                print(json.dumps(resp, indent=4))
+                self.print(query)
 
-            if not resp or not "QueryResponse" in resp:
+            resp = self._basic_call(request_type="POST", url=url, data=query)
+
+            if self.vb > 9:
+                self.print(json.dumps(resp, indent=4))
+
+            if not resp or "QueryResponse" not in resp:
                 if self.vb > 1:
-                    print("Failed query was:")
-                    print(query)
+                    self.print("Failed query was:")
+                    self.print(query)
+
                     if resp:
                         if isinstance(resp, (str, dict)) and resp:
-                            print(resp)
+                            self.print(resp)
                         else:
-                            print(resp.text)
-                            print(resp.status_code)
+                            self.print(resp.text)
+                            self.print(resp.status_code)
+
                 raise Exception("Failed QBO Query")
 
             if count_only:
@@ -398,12 +440,15 @@ class QBS(object):
             alias          = self.ALIASES.get(object_type, object_type)
             objs           = resp["QueryResponse"].get(alias, [])
             start_position = resp["QueryResponse"].get("startPosition")
+
             if start_position is None:
                 # We started seeing null responses for this attribute on
                 #  2019-06-14 (instead of the attribute just not being
                 #  present prior to that)
                 start_position = 0
+
             max_results    = resp["QueryResponse"].get("maxResults")
+
             if max_results is None:
                 # We started seeing null responses for this attribute on
                 #  2019-06-14 (instead of the attribute just not being
@@ -413,40 +458,41 @@ class QBS(object):
             all_objs      += objs
 
             if self.vb > 6 and max_results > 0:
-                print("Queried {:20s} objects {:>4} through {:4>}.".format(
-                    object_type, start_position,
+                self.print("Queried {:20s} objects {:>4} through {:4>}.".format(
+                    object_type,
+                    start_position,
                     start_position + max_results - 1))
 
             if max_results < per_page:
                 queried_all = True
 
             # This will be the NEXT query:
-            query = query[:base_len] + " STARTPOSITION {}".format(
-                start_position + per_page)
+            query = query[:base_len] + f" STARTPOSITION {start_position + per_page}"
 
         return all_objs
 
+    @logger.timeit(level=logging.DEBUG)
     def create(self, object_type, object_dict, **params):
         """
         The object type isn't actually included in the object_dict, which is
          why you also have to pass that in (first).
         """
-        url = "{}/{}/{}".format(
-            self.API_BASE_URL, self.cid, object_type.lower())
+        url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}"
 
-        return self._basic_call("POST", url, data=object_dict, **params)
+        return self._basic_call(request_type="POST", url=url, data=object_dict, **params)
 
+    @logger.timeit(level=logging.DEBUG)
     def read(self, object_type, object_id, **params):
         """
         Just returns a single object, no questions asked.
         """
         if len(params) > 0:
             raise NotImplementedError()
-        url = "{}/{}/{}/{}".format(
-            self.API_BASE_URL, self.cid, object_type.lower(), object_id)
+        url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}/{object_id}"
 
-        return self._basic_call("GET", url)
+        return self._basic_call(request_type="GET", url=url)
 
+    @logger.timeit(level=logging.DEBUG)
     def update(self, object_type, object_dict, **params):
         """
         Unlike with the delete method, you really have to provide the update
@@ -456,11 +502,11 @@ class QBS(object):
         if len(params) > 0:
             raise NotImplementedError()
 
-        url = "{}/{}/{}".format(
-            self.API_BASE_URL, self.cid, object_type.lower())
+        url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}"
 
-        return self._basic_call("POST", url, data=object_dict)
+        return self._basic_call(request_type="POST", url=url, data=object_dict)
 
+    @logger.timeit(level=logging.DEBUG)
     def delete(self, object_type, object_id=None, object_dict=None, **params):
         """
         Either provide an object_dict (which will simply be handed to the API
@@ -471,8 +517,7 @@ class QBS(object):
         if len(params) > 0:
             raise NotImplementedError()
 
-        url = "{}/{}/{}".format(
-            self.API_BASE_URL, self.cid, object_type.lower())
+        url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}"
 
         if object_id and not object_dict:
             object_dict = self.read(object_type, object_id)[object_type]
@@ -482,18 +527,24 @@ class QBS(object):
             "Id"        : object_dict["Id"],
             "SyncToken" : object_dict["SyncToken"]}
 
-        return self._basic_call(
-            "POST", url, data=skinny_dict, params={"operation" : "delete"})
+        return self._basic_call(request_type="POST",
+                                url=url,
+                                data=skinny_dict,
+                                params={"operation": "delete"})
 
+    @logger.timeit(level=logging.DEBUG)
     def batch(self, items):
         """
         https://developer.intuit.com/app/developer/qbo/docs/api/
          accounting/all-entities/batch
         """
         url = f"{self.API_BASE_URL}/{self.cid}/batch"
-        return self._basic_call(
-            "POST", url, data={"BatchItemRequest" : items})
-    
+
+        return self._basic_call(request_type="POST",
+                                url=url,
+                                data={"BatchItemRequest": items})
+
+    @logger.timeit(level=logging.DEBUG)
     def change_data_capture(self, utc_since, object_types):
         """
         https://developer.intuit.com/docs/api/accounting/ChangeDataCapture
@@ -503,7 +554,7 @@ class QBS(object):
         object_types should be a list, e.g.
          ["Purchase", "JournalEntry", "Vendor"]
         """
-        url = "{}/{}/cdc".format(self.API_BASE_URL, self.cid)
+        url = f"{self.API_BASE_URL}/{self.cid}/cdc"
 
         if isinstance(utc_since, datetime.datetime):
             # Either pass in a UTC datetime or a string formatted like this:
@@ -514,24 +565,24 @@ class QBS(object):
             "entities"     : ",".join(object_types)}
 
         if self.vb > 7:
-            print("CDC Params:")
-            print(json.dumps(params, indent=4))
+            self.print("CDC Params:")
+            self.print(json.dumps(params, indent=4))
 
         # This will be a list of dictionaries, each of which relates to
         #  a specific response...
-        return self._basic_call("GET", url, params=params)
+        return self._basic_call(request_type="GET", url=url, params=params)
 
+    @logger.timeit(level=logging.DEBUG)
     def report(self, report_name, **params):
         """
         Use the QBO reporting API, documented here:
         """
-        url = "{}/{}/reports/{}".format(
-            self.API_BASE_URL, self.cid, report_name)
+        url = f"{self.API_BASE_URL}/{self.cid}/reports/{report_name}"
 
         if self.vb > 7:
-            print(json.dumps(params, indent=4))
+            self.print(json.dumps(params, indent=4))
 
-        raw = self._basic_call("GET", url, **{"params" : params})
+        raw = self._basic_call(request_type="GET", url=url, **{"params" : params})
 
         if not raw:
             msg = "\n\n".join([
@@ -546,8 +597,8 @@ class QBS(object):
             raise Exception(msg)
 
         if self.vb > 7:
-            print(json.dumps(raw["Header"], indent=4))
-            print('(raw["Header"] is above)')
+            self.print(json.dumps(raw["Header"], indent=4))
+            self.print('(raw["Header"] is above)')
 
         return raw
 
@@ -556,6 +607,8 @@ class QBS(object):
         '\u2013' : "-",
         '\uff0c' : ", ",
     }
+
+    @logger.timeit(level=logging.DEBUG)
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
                include_on_send=False):
@@ -575,18 +628,18 @@ class QBS(object):
          of the attachable to get the name right (which will be all lower-case)
          and to achieve the attachment to one or more transaction entities.
         """
-        url       = "{}/{}/upload".format(self.API_BASE_URL, self.cid)
+        url       = f"{self.API_BASE_URL}/{self.cid}/upload"
         loc, name = os.path.split(path)
         #base, ext = name.rsplit(".", 1)
         base, ext = os.path.splitext(name)
         mime_type = self.ATTACHABLE_MIME_TYPES.get(ext.lower())
+
         if not mime_type:
-            raise Exception(
-                "MIME type for files with extension {}?".format(ext))
+            raise Exception(f"MIME type for files with extension {ext}?")
+
         boundary  = "-------------PythonMultipartPost"
         headers   = {
-            "Content-Type"    : "multipart/form-data;boundary={}".format(
-                boundary),
+            "Content-Type"    : f"multipart/form-data;boundary={boundary}",
             "accept"          : "application/json",
             "Connection"      : "close",
             #"Accept-Encoding" : "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
@@ -639,9 +692,9 @@ class QBS(object):
             "request_body" : request_body
         }
 
-        
-        return self._basic_call("POST", url, data=data)
+        return self._basic_call(request_type="POST", url=url, data=data)
 
+    @logger.timeit(level=logging.DEBUG)
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
@@ -664,44 +717,49 @@ class QBS(object):
 
         if not name:
             name  = fn + ""
+
         path      = os.path.join(loc, name)
 
         handle    = open(path, "wb")
+
         for chunk in requests.get(link).iter_content(1024):
             handle.write(chunk)
 
         handle.close()
 
-        return path # Because this may have changed if a directory was passed in
+        return path  # Because this may have changed if a directory was passed in
 
+    @logger.timeit(level=logging.DEBUG)
     def get_pdf(self, object_type, object_id, path):
-        """https://developer.intuit.com/docs/api/accounting/invoice"""
-        link   = "{}/{}/{}/{}/pdf".format(
-            self.API_BASE_URL, self.cid, object_type.lower(), object_id)
+        """
+        https://developer.intuit.com/docs/api/accounting/invoice
+        """
+        link   = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}/{object_id}/pdf"
 
         if self.vb > 4:
-            print("Downloading {} {} from {}...".format(
-                object_type, object_id, link))
+            self.print(f"Downloading {object_type} {object_id} from {link}...")
 
         with open(path, "wb") as handle:
-            for chunk in self._basic_call("GET", link).iter_content(1024):
+            for chunk in self._basic_call(request_type="GET", url=link).iter_content(1024):
                 handle.write(chunk)
 
             handle.close()
 
         return link
 
+    @logger.timeit(level=logging.DEBUG)
     def send(self, object_type, object_id, recipient):
-        """https://developer.intuit.com/docs/api/accounting/invoice"""
-        url   = "{}/{}/{}/{}/send".format(
-            self.API_BASE_URL, self.cid, object_type.lower(), object_id)
+        """
+        https://developer.intuit.com/docs/api/accounting/invoice
+        """
+        url   = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}/{object_id}/send"
 
         if self.vb > 4:
-            print("Emailing {} {} to {}...".format(
-                object_type, object_id, recipient))
+            self.print(f"Emailing {object_type} {object_id} to {recipient}...")
 
-        return self._basic_call(
-            "POST", url, **{"params" : {"params" : {"sendTo" : recipient}}})
+        return self._basic_call(request_type="POST",
+                                url=url,
+                                **{"params": {"params": {"sendTo": recipient}}})
         
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
