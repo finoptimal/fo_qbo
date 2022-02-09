@@ -15,16 +15,18 @@ import datetime
 import json
 import logging
 import os
-import requests
 import textwrap
 import time
 from base64 import b64encode
 
-from finoptimal.logging import LoggedClass, get_logger
+import requests
+
+from finoptimal.logging import LoggedClass, get_logger, get_file_logger
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
 logger = get_logger(__name__)
+api_logger = get_file_logger('api/qbo')
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
@@ -723,7 +725,12 @@ class QBS(LoggedClass):
 
         handle    = open(path, "wb")
 
-        for chunk in requests.get(link).iter_content(1024):
+        resp = requests.get(link)
+
+        api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+                        f"{resp.request.method.ljust(4)} {resp.url}")
+
+        for chunk in resp.iter_content(1024):
             handle.write(chunk)
 
         handle.close()
