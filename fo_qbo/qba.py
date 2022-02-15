@@ -17,7 +17,7 @@ from urllib.parse        import urlparse, parse_qs
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass
 
 logger = get_logger(__name__)
-qbo_logger = get_file_logger('qbo')
+api_logger = get_file_logger('api/qbo')
 
 CALLBACK_URL      = "http://a.b.com"
 
@@ -92,7 +92,7 @@ class QBAuth2(LoggedClass):
         self.debug(f'resp = {resp.status_code} {resp.reason}')
         self.debug(f'resp.json() = {pformat(resp.json())}')
 
-        qbo_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+        api_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
                         f"{resp.request.method.ljust(4)} {resp.url}")
 
         if resp.status_code == 401:
