@@ -15,6 +15,7 @@ from io                  import StringIO
 from urllib.parse        import urlparse, parse_qs
 
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass
+from finoptimal.utilities import retry
 
 logger = get_logger(__name__)
 api_logger = get_file_logger('api/qbo')
@@ -183,6 +184,7 @@ class QBAuth2(LoggedClass):
         self.new_token         = True
         self.new_refresh_token = True
 
+    @retry()
     def refresh(self):
         if self.vb > 2:
             self.print(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
