@@ -14,7 +14,7 @@ from intuitlib.migration import migrate
 from io                  import StringIO
 from urllib.parse        import urlparse, parse_qs
 
-from finoptimal.logging import get_logger, get_file_logger, LoggedClass
+from finoptimal.logging import get_logger, get_file_logger, LoggedClass, void, returns
 from finoptimal.utilities import retry
 
 logger = get_logger(__name__)
@@ -23,7 +23,7 @@ api_logger = get_file_logger('api/qbo')
 CALLBACK_URL      = "http://a.b.com"
 
 
-class QBAuth2(LoggedClass):
+class QBAuth2(LoggedClass):    
     def __init__(self, client_id, client_secret,  realm_id=None,
                  refresh_token=None, access_token=None,
                  callback_url=CALLBACK_URL, verbosity=0):
@@ -69,7 +69,7 @@ class QBAuth2(LoggedClass):
             access_token=self.access_token,
             realm_id=self.realm_id)
 
-    @logger.timeit()
+    @logger.timeit(**returns, duration=True)
     def request(self, request_type, url, header_auth=True, realm='',
                 verify=True, headers=None, data=None, **params):
         """
@@ -90,8 +90,8 @@ class QBAuth2(LoggedClass):
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
 
-        self.debug(f'resp = {resp.status_code} {resp.reason}')
-        self.debug(f'resp.json() = {pformat(resp.json())}')
+        # self.debug(f'resp = {resp.status_code} {resp.reason}')
+        # self.debug(f'resp.json() = {pformat(resp.json())}')
 
         api_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
                         f"{resp.request.method.ljust(4)} {resp.url}")
@@ -112,6 +112,7 @@ class QBAuth2(LoggedClass):
             
         return resp
 
+    @logger.timeit(**void)
     def establish_access(self):
         if getattr(self, "_has_access", False):
             return
@@ -143,6 +144,7 @@ class QBAuth2(LoggedClass):
     # the following functions correspond to those in the Intuit OAuth client
     # docs: https://oauth-pythonclient.readthedocs.io/en/latest/user-guide.html
     #  #authorize-your-app
+    @logger.timeit(**returns)
     def get_authorize_url(self):
         url = self.session.get_authorization_url(self.SCOPES)
         return url
@@ -150,6 +152,7 @@ class QBAuth2(LoggedClass):
     def get_tokens_and_expiry(self, auth_code):
         return self.session.get_bearer_token(auth_code)
 
+    @logger.timeit(**void)
     def oob(self, callback_url=CALLBACK_URL):
         """
         Out of Band solution adapted from QBAuth.
@@ -167,6 +170,7 @@ class QBAuth2(LoggedClass):
 
         self.handle_authorized_callback_url(authorized_callback_url)
 
+    @logger.timeit(**void)
     def handle_authorized_callback_url(self, url):
         tail               = url.split("?")[1].strip()
         params             = dict([tuple(param.split("=")) for param in tail.split("&")])
@@ -185,6 +189,7 @@ class QBAuth2(LoggedClass):
         self.new_refresh_token = True
 
     @retry()
+    @logger.timeit(**void)
     def refresh(self):
         if self.vb > 2:
             self.print(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
@@ -198,6 +203,7 @@ class QBAuth2(LoggedClass):
 
         self.new_token     = True
 
+    @logger.timeit(**void)
     def disconnect(self):
         self.print(f"Disconnecting {self.realm_id}'s access token!")
         resp = self.session.revoke(token=self.refresh_token)

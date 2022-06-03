@@ -21,7 +21,7 @@ from base64 import b64encode
 
 import requests
 
-from finoptimal.logging import LoggedClass, get_logger, get_file_logger
+from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
@@ -29,6 +29,7 @@ logger = get_logger(__name__)
 api_logger = get_file_logger('api/qbo')
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
+
 
 def retry(max_tries=2, delay_secs=0.2):
     """
@@ -54,12 +55,12 @@ def retry(max_tries=2, delay_secs=0.2):
                 try:
                     return retriable_function(*args, **kwargs)
                     break
-                except Exception as exc:
+                except Exception as ex:
                     tries    -= 1
                     attempts += 1
 
                     if tries <= 0:
-                        raise
+                        raise ex
 
                     # back off as failures accumulate in case it's transient
                     time.sleep(delay * attempts)
@@ -136,9 +137,14 @@ class QBS(LoggedClass):
                 self.at = None
 
         self.qba = QBAuth2(
-            self.cli, self.cls, realm_id=self.cid,
-            refresh_token=self.rt, access_token=self.at,
-            callback_url=self.cbu, verbosity=self.vb)
+            self.cli,
+            self.cls,
+            realm_id=self.cid,
+            refresh_token=self.rt,
+            access_token=self.at,
+            callback_url=self.cbu,
+            verbosity=self.vb
+        )
 
         if self.cid is None:
             self.qba.establish_access()
@@ -160,6 +166,7 @@ class QBS(LoggedClass):
                 self.print(f"New access token et al for company id {self.cid}.")
                 self.print("Don't forget to store it!")
 
+    @logger.timeit(**void)
     def _reload_credentials(self):
         """
         Addresses a situation where another process refreshes while this
@@ -181,7 +188,7 @@ class QBS(LoggedClass):
             setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns, duration=True)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
@@ -290,7 +297,8 @@ class QBS(LoggedClass):
             verify=True,
             headers=headers,
             data=data,
-            **params)
+            **params
+        )
         
         self.last_response = response
 
@@ -311,10 +319,12 @@ class QBS(LoggedClass):
                 ipdb.set_trace()
 
         if self.oauth_version == 2 and self.address_new_oauth2_token():
-            return self._basic_call(request_type=request_type,
-                                    url=url,
-                                    data=original_data,
-                                    **original_params)
+            return self._basic_call(
+                request_type=request_type,
+                url=url,
+                data=original_data,
+                **original_params
+            )
                     
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
@@ -341,7 +351,7 @@ class QBS(LoggedClass):
 
         raise ConnectionError(error_message)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def address_new_oauth2_token(self):
         if not self.qba.new_token:
             return False
@@ -381,7 +391,7 @@ class QBS(LoggedClass):
         "CreditCardPayment": "CreditCardPaymentTxn",  # Why, Intuit?!
     }
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def query(self, object_type, where_tail=None, count_only=False,
               start_position=None, per_page=1000):
         """
@@ -473,7 +483,7 @@ class QBS(LoggedClass):
 
         return all_objs
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**void)
     def create(self, object_type, object_dict, **params):
         """
         The object type isn't actually included in the object_dict, which is
@@ -483,7 +493,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=object_dict, **params)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def read(self, object_type, object_id, **params):
         """
         Just returns a single object, no questions asked.
@@ -494,7 +504,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="GET", url=url)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def update(self, object_type, object_dict, **params):
         """
         Unlike with the delete method, you really have to provide the update
@@ -508,7 +518,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=object_dict)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def delete(self, object_type, object_id=None, object_dict=None, **params):
         """
         Either provide an object_dict (which will simply be handed to the API
@@ -534,7 +544,7 @@ class QBS(LoggedClass):
                                 data=skinny_dict,
                                 params={"operation": "delete"})
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def batch(self, items):
         """
         https://developer.intuit.com/app/developer/qbo/docs/api/
@@ -546,7 +556,7 @@ class QBS(LoggedClass):
                                 url=url,
                                 data={"BatchItemRequest": items})
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def change_data_capture(self, utc_since, object_types):
         """
         https://developer.intuit.com/docs/api/accounting/ChangeDataCapture
@@ -574,7 +584,7 @@ class QBS(LoggedClass):
         #  a specific response...
         return self._basic_call(request_type="GET", url=url, params=params)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def report(self, report_name, **params):
         """
         Use the QBO reporting API, documented here:
@@ -610,7 +620,7 @@ class QBS(LoggedClass):
         '\uff0c' : ", ",
     }
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
                include_on_send=False):
@@ -696,7 +706,7 @@ class QBS(LoggedClass):
 
         return self._basic_call(request_type="POST", url=url, data=data)
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def download(self, attachable_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/attachable
@@ -724,7 +734,7 @@ class QBS(LoggedClass):
 
         handle    = open(path, "wb")
 
-        resp = requests.get(link)
+        resp = requests.get(link, timeout=60)
 
         api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
                         f"{resp.request.method.ljust(4)} {resp.url}")
@@ -736,7 +746,7 @@ class QBS(LoggedClass):
 
         return path  # Because this may have changed if a directory was passed in
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def get_pdf(self, object_type, object_id, path):
         """
         https://developer.intuit.com/docs/api/accounting/invoice
@@ -754,7 +764,7 @@ class QBS(LoggedClass):
 
         return link
 
-    @logger.timeit(level=logging.DEBUG)
+    @logger.timeit(**returns)
     def send(self, object_type, object_id, recipient):
         """
         https://developer.intuit.com/docs/api/accounting/invoice
