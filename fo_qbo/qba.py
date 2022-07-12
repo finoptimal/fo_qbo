@@ -93,8 +93,8 @@ class QBAuth2(LoggedClass):
         # self.debug(f'resp = {resp.status_code} {resp.reason}')
         # self.debug(f'resp.json() = {pformat(resp.json())}')
 
-        api_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
-                        f"{resp.request.method.ljust(4)} {resp.url}")
+        # api_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+        #                 f"{resp.request.method.ljust(4)} {resp.url}")
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
