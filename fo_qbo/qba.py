@@ -188,7 +188,7 @@ class QBAuth2(LoggedClass):
         self.new_token         = True
         self.new_refresh_token = True
 
-    @retry()
+    @retry(delay_secs=30)
     @logger.timeit(**void)
     def refresh(self):
         if self.vb > 2:
