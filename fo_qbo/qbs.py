@@ -490,7 +490,7 @@ class QBS(LoggedClass):
          why you also have to pass that in (first).
         """
         url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}"
-
+        self.touchless_test()
         return self._basic_call(request_type="POST", url=url, data=object_dict, **params)
 
     @logger.timeit(**returns)
@@ -515,7 +515,7 @@ class QBS(LoggedClass):
             raise NotImplementedError()
 
         url = f"{self.API_BASE_URL}/{self.cid}/{object_type.lower()}"
-
+        self.touchless_test()
         return self._basic_call(request_type="POST", url=url, data=object_dict)
 
     @logger.timeit(**returns)
@@ -538,7 +538,7 @@ class QBS(LoggedClass):
         skinny_dict = {
             "Id"        : object_dict["Id"],
             "SyncToken" : object_dict["SyncToken"]}
-
+        self.touchless_test()
         return self._basic_call(request_type="POST",
                                 url=url,
                                 data=skinny_dict,
@@ -551,7 +551,7 @@ class QBS(LoggedClass):
          accounting/all-entities/batch
         """
         url = f"{self.API_BASE_URL}/{self.cid}/batch"
-
+        self.touchless_test()
         return self._basic_call(request_type="POST",
                                 url=url,
                                 data={"BatchItemRequest": items})
@@ -703,7 +703,7 @@ class QBS(LoggedClass):
             "headers"      : headers.copy(),
             "request_body" : request_body
         }
-
+        self.touchless_test()
         return self._basic_call(request_type="POST", url=url, data=data)
 
     @logger.timeit(**returns)
@@ -773,10 +773,27 @@ class QBS(LoggedClass):
 
         if self.vb > 4:
             self.print(f"Emailing {object_type} {object_id} to {recipient}...")
-
+        self.touchless_test()
         return self._basic_call(request_type="POST",
                                 url=url,
                                 **{"params": {"params": {"sendTo": recipient}}})
         
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
+
+    @property
+    def touchless_mode(self):
+        if not hasattr(self, "_touchless_mode"):
+            self.touchless_mode = False
+
+        return self._touchless_mode
+
+    @touchless_mode.setter
+    def touchless_mode(self, tm):
+        if not isinstance(tm, bool):
+            raise TypeError(f"Can't set self.touchless_mode to anything but a bool (which {tm} isn't)!")
+        self._touchless_mode = tm
+
+    def touchless_test(self):
+        if self.touchless_mode:
+            raise Exception("Touchless Failure")
