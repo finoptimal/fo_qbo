@@ -123,6 +123,7 @@ class QBS(LoggedClass):
 
         self._setup()
 
+    @logger.timeit(**void)
     def _setup(self):
         """
         Make sure the access_token is fresh (otherwise reconnect). If there's NO
@@ -288,7 +289,7 @@ class QBS(LoggedClass):
                     continue
 
                 raise   
-                    
+
         response = self.qba.request(
             request_type.upper(),
             url,
@@ -737,7 +738,7 @@ class QBS(LoggedClass):
         resp = requests.get(link, timeout=60)
 
         api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
-                        f"{resp.request.method.ljust(4)} {resp.url}")
+                        f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
 
         for chunk in resp.iter_content(1024):
             handle.write(chunk)

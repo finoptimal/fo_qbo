@@ -69,7 +69,7 @@ class QBAuth2(LoggedClass):
             access_token=self.access_token,
             realm_id=self.realm_id)
 
-    @logger.timeit(**returns, duration=True)
+    @logger.timeit(**returns, duration=True, expand=True)
     def request(self, request_type, url, header_auth=True, realm='',
                 verify=True, headers=None, data=None, **params):
         """
@@ -90,11 +90,10 @@ class QBAuth2(LoggedClass):
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
 
-        # self.debug(f'resp = {resp.status_code} {resp.reason}')
-        # self.debug(f'resp.json() = {pformat(resp.json())}')
-
-        # api_logger.debug(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
-        #                 f"{resp.request.method.ljust(4)} {resp.url}")
+        msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+              f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+        self.info(msg)
+        api_logger.info(msg)
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
