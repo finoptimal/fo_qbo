@@ -737,8 +737,12 @@ class QBS(LoggedClass):
 
         resp = requests.get(link, timeout=60)
 
-        api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
-                        f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
+        try:
+            api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+                            f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
+        except requests.exceptions.JSONDecodeError as ex:
+            api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+                            f"{resp.request.method.ljust(4)} {resp.url} - None")
 
         for chunk in resp.iter_content(1024):
             handle.write(chunk)

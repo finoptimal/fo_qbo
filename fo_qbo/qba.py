@@ -90,8 +90,13 @@ class QBAuth2(LoggedClass):
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
 
-        msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
-              f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+        try:
+            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+                  f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+        except requests.exceptions.JSONDecodeError as ex:
+            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+                  f"{resp.request.method.ljust(4)} {resp.url} - None}"
+
         self.info(msg)
         api_logger.info(msg)
 
