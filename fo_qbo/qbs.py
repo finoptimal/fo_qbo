@@ -740,7 +740,7 @@ class QBS(LoggedClass):
         try:
             api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
                             f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
-        except requests.exceptions.JSONDecodeError as ex:
+        except Exception as ex:
             api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
                             f"{resp.request.method.ljust(4)} {resp.url} - None")
 
