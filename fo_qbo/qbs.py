@@ -787,18 +787,14 @@ class QBS(LoggedClass):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
 
     @property
-    def touchless_mode(self):
+    def touchless_mode(self) -> bool:
+        """bool: Touchless mode was activated from the command line."""
         if not hasattr(self, "_touchless_mode"):
-            self.touchless_mode = False
+            self._touchless_mode = True if self.job and self.job.args['touchless_mode'] else False
 
         return self._touchless_mode
 
-    @touchless_mode.setter
-    def touchless_mode(self, tm):
-        if not isinstance(tm, bool):
-            raise TypeError(f"Can't set self.touchless_mode to anything but a bool (which {tm} isn't)!")
-        self._touchless_mode = tm
-
-    def touchless_test(self):
+    def touchless_test(self) -> None:
+        """Raise an Exception if `touchless_mode` is True."""
         if self.touchless_mode:
             raise Exception("Touchless Failure")
