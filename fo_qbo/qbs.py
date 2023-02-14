@@ -790,7 +790,7 @@ class QBS(LoggedClass):
     def touchless_mode(self) -> bool:
         """bool: Touchless mode was activated from the command line."""
         if not hasattr(self, "_touchless_mode"):
-            self._touchless_mode = True if self.job and self.job.args['touchless_mode'] else False
+            self._touchless_mode = True if self.job and self.job.args.get('touchless_mode') else False
 
         return self._touchless_mode
 
