@@ -21,6 +21,7 @@ from base64 import b64encode
 
 import requests
 
+from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
@@ -796,5 +797,8 @@ class QBS(LoggedClass):
 
     def touchless_test(self) -> None:
         """Raise an Exception if `touchless_mode` is True."""
-        if self.touchless_mode:
-            raise Exception("Touchless Failure")
+        if self.touchless_mode and not environment.is_production():
+            error = 'Touchless Failure'
+            print(error)
+            import ipdb;ipdb.set_trace()
+            raise Exception(error)
