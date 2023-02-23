@@ -97,8 +97,9 @@ class QBAuth2(LoggedClass):
             msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
                   f"{resp.request.method.ljust(4)} {resp.url} - None"
 
-        self.info(msg)
-        api_logger.info(msg)
+
+        # self.info(msg)
+        # api_logger.info(msg)
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
