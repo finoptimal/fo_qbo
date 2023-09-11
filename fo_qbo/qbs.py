@@ -190,7 +190,7 @@ class QBS(LoggedClass):
             setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
-    @logger.timeit(**returns, duration=True)
+    @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
