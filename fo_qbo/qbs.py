@@ -190,7 +190,7 @@ class QBS(LoggedClass):
             setattr(self.qba, attr, getattr(self, attr))
 
     @retry()
-    @logger.timeit(**returns, duration=True)
+    @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
@@ -428,7 +428,7 @@ class QBS(LoggedClass):
         base_len = len(query)
 
         while not queried_all:
-            if self.vb > 4:
+            if self.vb > 6:
                 self.print(query)
 
             resp = self._basic_call(request_type="POST", url=url, data=query)
@@ -473,7 +473,7 @@ class QBS(LoggedClass):
 
             all_objs      += objs
 
-            if self.vb > 6 and max_results > 0:
+            if self.vb > 4 and max_results > 0:
                 self.print("Queried {:20s} objects {:>4} through {:4>}.".format(
                     object_type,
                     start_position,
