@@ -411,7 +411,9 @@ class QBS(LoggedClass):
         else:
             where_tail = ""
 
-        query       = f"SELECT {select_what} FROM {object_type}{where_tail} MAXRESULTS {per_page}"
+        query       = f"SELECT {select_what} FROM {object_type}{where_tail}"
+        if not count_only:
+            query += f" MAXRESULTS {per_page}"
 
         if not start_position is None:
             query  += f" STARTPOSITION {start_position}"
@@ -426,7 +428,7 @@ class QBS(LoggedClass):
         base_len = len(query)
 
         while not queried_all:
-            if self.vb > 7:
+            if self.vb > 4:
                 self.print(query)
 
             resp = self._basic_call(request_type="POST", url=url, data=query)
