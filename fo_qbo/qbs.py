@@ -18,6 +18,7 @@ import os
 import textwrap
 import time
 from base64 import b64encode
+from typing import Union, Optional
 
 import requests
 
@@ -394,29 +395,49 @@ class QBS(LoggedClass):
     }
 
     @logger.timeit(**returns)
-    def query(self, object_type, where_tail=None, count_only=False,
-              start_position=None, per_page=1000):
-        """
-        where_tail example: WHERE Active IN (true,false) ... the syntax is
-         SQLike and documented in Intuit's documentation.
+    def query(self,
+              object_type: str,
+              where_tail: Optional[str] = None,
+              count_only: bool = False,
+              start_position: Optional[int] = None,
+              per_page: int = 1000,
+              select_fields: Optional[str] = None) -> Union[list, int]:
+        """Query the QuickBooks Online API.
 
-        Handles pagination, because that's just no fun at all.
+        Parameters
+        ----------
+        object_type : str
+            The object type to query.
+        where_tail : str, optional
+            The WHERE clause (e.g., "WHERE Active in (true, false) ..."). See Intuit documentation for more info.
+        count_only : bool
+            Perform a count query, which returns an `int`. Defaults to False.
+        start_position : int, optional
+            The starting point of the response for pagination.
+        per_page : int
+            The number of objects to return per page.
+        select_fields : str, optional
+            The field(s) to use in the select statement, separated by commas.
+
+        Returns
+        -------
+        list or int
         """
         queried_all = False
 
-        select_what = "COUNT(*)" if count_only else "*"
-
-        if where_tail:
-            where_tail = " " + where_tail
+        if not select_fields:
+            select_what = "COUNT(*)" if count_only else "*"
         else:
-            where_tail = ""
+            select_what = "COUNT(*)" if count_only else select_fields
 
-        query       = f"SELECT {select_what} FROM {object_type}{where_tail}"
+        where_tail = " " + where_tail if where_tail else ""
+        query = f"SELECT {select_what} FROM {object_type}{where_tail}"
+
         if not count_only:
             query += f" MAXRESULTS {per_page}"
 
-        if not start_position is None:
-            query  += f" STARTPOSITION {start_position}"
+        if start_position is not None:
+            query += f" STARTPOSITION {start_position}"
             
         url = f"{self.API_BASE_URL}/{self.cid}/query"
 
