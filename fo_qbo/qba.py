@@ -69,52 +69,52 @@ class QBAuth2(LoggedClass):
             access_token=self.access_token,
             realm_id=self.realm_id)
 
-    @logger.timeit(**returns, expand=True)
-    def request(self, request_type, url, header_auth=True, realm='',
-                verify=True, headers=None, data=None, **params):
-        """
-        We don't handle authorization until the session's first request happens.
-        """
-        self.establish_access()
-
-        auth_header = f'Bearer {self.session.access_token}'
-        _headers = {
-            'Authorization': auth_header,
-        }
-
-        for key, val in headers.items():
-            _headers[key] = val
-            
-        if self.vb > 19:
-            self.print("QBA headers", _headers)
-
-        resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
-
-        try:
-            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
-        except Exception as ex:
-            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - None"
-
-        # self.info(msg)
-        api_logger.info(msg)
-
-        if resp.status_code == 401:
-            if not hasattr(self, "_attempts"):
-                self._attempts  = 1
-            else:
-                self._attempts += 1
-
-            if self._attempts > 3:
-                raise Exception(resp.text)
-                
-            self.refresh()
-            
-        if self.vb > 10:
-            self.print("response code:", resp.status_code)
-            
-        return resp
+    # @logger.timeit(**returns, expand=True)
+    # def request(self, request_type, url, header_auth=True, realm='',
+    #             verify=True, headers=None, data=None, **params):
+    #     """
+    #     We don't handle authorization until the session's first request happens.
+    #     """
+    #     self.establish_access()
+    #
+    #     auth_header = f'Bearer {self.session.access_token}'
+    #     _headers = {
+    #         'Authorization': auth_header,
+    #     }
+    #
+    #     for key, val in headers.items():
+    #         _headers[key] = val
+    #
+    #     if self.vb > 19:
+    #         self.print("QBA headers", _headers)
+    #
+    #     resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
+    #
+    #     try:
+    #         msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+    #               f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+    #     except Exception as ex:
+    #         msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+    #               f"{resp.request.method.ljust(4)} {resp.url} - None"
+    #
+    #     # self.info(msg)
+    #     api_logger.info(msg)
+    #
+    #     if resp.status_code == 401:
+    #         if not hasattr(self, "_attempts"):
+    #             self._attempts  = 1
+    #         else:
+    #             self._attempts += 1
+    #
+    #         if self._attempts > 3:
+    #             raise Exception(resp.text)
+    #
+    #         self.refresh()
+    #
+    #     if self.vb > 10:
+    #         self.print("response code:", resp.status_code)
+    #
+    #     return resp
 
     @logger.timeit(**void)
     def establish_access(self):
