@@ -37,16 +37,16 @@ class QBOAuth(DatabaseLoggedClass):
         self._refresh_token = None
         self._has_access = False
         self._fo_darkonim = self._get_effective_credentials_bucket(client_code)
-        self._load_client_credentials_from_bucket()
+        self._set_client_credentials_from_bucket()
 
         # Set static attributes
-        self._client_id = self._fo_darkonim.service_account_credentials.get('client_id')
-        self._client_secret = self._fo_darkonim.service_account_credentials.get('client_secret')
+        self._app_id = self._fo_darkonim.service_account_credentials.get('client_id')
+        self._app_secret = self._fo_darkonim.service_account_credentials.get('client_secret')
         self._callback_url = self._fo_darkonim.service_account_credentials.get('callback_url')
 
-        self._auth_client = AuthClient(
-            client_id=self._client_id,
-            client_secret=self._client_secret,
+        self._session = AuthClient(
+            client_id=self._app_id,
+            client_secret=self._app_secret,
             redirect_uri=self._callback_url,
             environment=self.ENVIRONMENT,
             access_token=self._access_token,
@@ -106,21 +106,21 @@ class QBOAuth(DatabaseLoggedClass):
         # own), so we recurse through the bucket tree until we find one without a substitute.
         self._get_effective_credentials_bucket(client_code=substitute_client_code)
 
-    def _load_client_credentials_from_bucket(self) -> None:
+    def _set_client_credentials_from_bucket(self) -> None:
         self._access_token = self._fo_darkonim.client_credentials.get('access_token')
         self._refresh_token = self._fo_darkonim.client_credentials.get('refresh_token')
         self._realm_id = self._fo_darkonim.client_credentials.get('company_id')
 
-    def _load_client_credentials_from_auth_client(self) -> None:
-        self._realm_id = self._auth_client.realm_id
-        self._access_token = self._auth_client.access_token
-        self._refresh_token = self._auth_client.refresh_token
+    def _set_client_credentials_from_session(self) -> None:
+        self._realm_id = self._session.realm_id
+        self._access_token = self._session.access_token
+        self._refresh_token = self._session.refresh_token
 
     def _handle_authorization_from_terminal(self) -> None:
-        authorization_url = self._auth_client.get_authorization_url(self.SCOPES)
+        authorization_url = self._session.get_authorization_url(self.SCOPES)
         authorized_url = self._get_authorized_url(authorization_url)
-        self._update_auth_client_credentials(authorized_url)
-        self._load_client_credentials_from_auth_client()
+        self._update_session_credentials(authorized_url)
+        self._set_client_credentials_from_session()
 
     def _get_authorized_url(self, authorization_url: str):
         self.print("Please send the user here to authorize this app to access their QBO data:")
@@ -133,12 +133,12 @@ class QBOAuth(DatabaseLoggedClass):
 
         return authorized_url
 
-    def _update_auth_client_credentials(self, authorized_url: str) -> dict:
+    def _update_session_credentials(self, authorized_url: str) -> dict:
         tail = authorized_url.split("?")[1].strip()
         params = dict([tuple(param.split("=")) for param in tail.split("&")])
         auth_code = params.get('code')
         realm_id = params.get('realmId')
-        self._auth_client.get_bearer_token(auth_code=auth_code, realm_id=realm_id)
+        self._session.get_bearer_token(auth_code=auth_code, realm_id=realm_id)
 
     def _save_client_credentials(self):
         if self.realm_id and self.access_token and self.refresh_token:
@@ -151,9 +151,9 @@ class QBOAuth(DatabaseLoggedClass):
             }
 
     def _refresh_tokens(self) -> None:
-        self._auth_client.refresh()
-        self._access_token = self._auth_client.access_token
-        self._refresh_token = self._auth_client.refresh_token
+        self._session.refresh()
+        self._access_token = self._session.access_token
+        self._refresh_token = self._session.refresh_token
 
     @property
     def has_access(self) -> bool:
@@ -177,4 +177,4 @@ class QBOAuth(DatabaseLoggedClass):
             return True
 
     def disconnect(self) -> None:
-        self._auth_client.revoke(token=self.refresh_token)
+        self._session.revoke(token=self.refresh_token)
