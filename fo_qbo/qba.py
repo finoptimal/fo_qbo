@@ -195,12 +195,15 @@ class QBAuth2(LoggedClass):
     @retry(delay_secs=30)
     @logger.timeit(**void)
     def refresh(self):
-        if self.vb > 2:
-            self.print(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
+        # if self.vb > 2:
+        self.info(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
 
         self.session.refresh()
         self.access_token  = self.session.access_token
         self.refresh_token = self.session.refresh_token
+
+        self.info(f'New access token for realm id {self.realm_id}: {self.access_token}')
+        self.info(f'New refresh token for realm id {self.realm_id}: {self.refresh_token}')
 
         if self.vb > 2:
             self.print("  Success!\n")

@@ -372,6 +372,9 @@ class QBS(LoggedClass):
             "company_id"    : self.cid
         }
 
+        self.info('New credentials!')
+        self.info(updater)
+
         if self.qba.new_refresh_token:
             # In case we actually need to re-authorize after a year,
             #  let's know when we got the refresh token
