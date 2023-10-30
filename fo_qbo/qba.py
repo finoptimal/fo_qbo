@@ -26,14 +26,14 @@ CALLBACK_URL      = "http://a.b.com"
 class QBAuth2(LoggedClass):    
     def __init__(self, client_id, client_secret,  realm_id=None,
                  refresh_token=None, access_token=None,
-                 callback_url=CALLBACK_URL, verbosity=0):
+                 callback_url=CALLBACK_URL, verbosity=0, env=None):
         self.client_id           = client_id
         self.client_secret       = client_secret
         self.refresh_token       = refresh_token
         self.access_token        = access_token
         self.realm_id            = realm_id
         self.vb                  = verbosity
-        self.environment         = "production"
+        self.environment         = "sandbox" if env and env == "sandbox" else "production"
 
         self.session             = None
         self.new_token           = False

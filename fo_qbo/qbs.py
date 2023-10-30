@@ -21,7 +21,7 @@ from base64 import b64encode
 from typing import Union, Optional
 
 import requests
-
+from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from .mime_types import MIME_TYPES
@@ -75,7 +75,8 @@ class QBS(LoggedClass):
     """
     Basic wrapper, with auth functionality broken out into the QBA class
     """
-    API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
+    PRODUCTION_API_URL = "https://quickbooks.api.intuit.com/v3/company"
+    SANDBOX_API_URL = "https://sandbox-quickbooks.api.intuit.com/v3/company"
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
@@ -95,6 +96,18 @@ class QBS(LoggedClass):
         You must pass in a client_id and client_secret, or
         a refresh_token to bypass OOB authentication.
         """
+        super().__init__()
+
+        self.qbo_env = "sandbox" \
+            if settings.configured and settings.DATABASES['default']['NAME'] != 'themagic' \
+            else "production"
+        self.api_base_url = self.SANDBOX_API_URL \
+            if self.qbo_env == "sandbox" \
+            else self.PRODUCTION_API_URL
+
+        # possibly needed for backwards compatability
+        self.API_BASE_URL = self.api_base_url
+
         if access_token_secret is not None:
             # If there is no active OAuth1 access_tokens (and presumably, then,
             #  no access_token_secret), we use OAuth2. The deprecated Py2
@@ -125,6 +138,9 @@ class QBS(LoggedClass):
 
         self._setup()
 
+        if self.qbo_env == "sandbox":
+            self.info(f'API_BASE_URL = {self.API_BASE_URL}')
+
     @logger.timeit(**void)
     def _setup(self):
         """
@@ -146,7 +162,8 @@ class QBS(LoggedClass):
             refresh_token=self.rt,
             access_token=self.at,
             callback_url=self.cbu,
-            verbosity=self.vb
+            verbosity=self.vb,
+            env=self.qbo_env
         )
 
         if self.cid is None:
