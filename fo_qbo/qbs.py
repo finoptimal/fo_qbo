@@ -137,7 +137,7 @@ class QBS(LoggedClass):
 
         self._setup()
 
-        if self.QBO_ENV == "sandbox":
+        if self.qbo_env == "sandbox":
             self.info(f'API_BASE_URL = {self.API_BASE_URL}')
 
     @logger.timeit(**void)
@@ -162,7 +162,7 @@ class QBS(LoggedClass):
             access_token=self.at,
             callback_url=self.cbu,
             verbosity=self.vb,
-            env=self.QBO_ENV
+            env=self.qbo_env
         )
 
         if self.cid is None:
