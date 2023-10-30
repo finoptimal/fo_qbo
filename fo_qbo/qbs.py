@@ -20,7 +20,7 @@ import time
 from base64 import b64encode
 
 import requests
-
+from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from .mime_types import MIME_TYPES
@@ -74,7 +74,9 @@ class QBS(LoggedClass):
     """
     Basic wrapper, with auth functionality broken out into the QBA class
     """
-    API_BASE_URL              = "https://quickbooks.api.intuit.com/v3/company"
+    API_BASE_URL = "https://sandbox-quickbooks.api.intuit.com/v3/company" \
+        if settings.configured and settings.DATABASES['default']['NAME'] != 'themagic' \
+        else "https://quickbooks.api.intuit.com/v3/company"
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
@@ -123,6 +125,9 @@ class QBS(LoggedClass):
         self.vb    = verbosity
 
         self._setup()
+
+        if settings.configured and settings.DATABASES['default']['NAME']:
+            self.info(f'API_BASE_URL = {self.API_BASE_URL}')
 
     @logger.timeit(**void)
     def _setup(self):
