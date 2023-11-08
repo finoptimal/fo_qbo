@@ -319,7 +319,17 @@ class QBS(LoggedClass):
             data=data,
             **params
         )
-        
+
+        try:
+            api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
+                            f"{response.request.method.ljust(4)} {response.url} - {response.json()}")
+        except Exception as ex:
+            try:
+                api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
+                                f"{response.request.method.ljust(4)} {response.url} - None")
+            except:
+                pass
+
         self.last_response = response
 
         if not hasattr(self, "resps"):
