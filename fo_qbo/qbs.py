@@ -13,7 +13,6 @@ Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
 import collections
 import datetime
 import json
-import logging
 import os
 import textwrap
 import time
@@ -792,10 +791,10 @@ class QBS(LoggedClass):
         resp = requests.get(link, timeout=60)
 
         try:
-            api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+            api_logger.info(f"{resp.__hash__()} - {self.qba.caller} - {resp.status_code} {resp.reason} - "
                             f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
         except Exception as ex:
-            api_logger.info(f"{resp.__hash__()} - {resp.status_code} {resp.reason} - "
+            api_logger.info(f"{resp.__hash__()} - {self.qba.caller} - {resp.status_code} {resp.reason} - "
                             f"{resp.request.method.ljust(4)} {resp.url} - None")
 
         for chunk in resp.iter_content(1024):
