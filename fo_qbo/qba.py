@@ -3,16 +3,13 @@ QBO Rest API Client
 
 Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
 """
-import logging
-from pprint import pformat
-
+import os
 import requests
+import sys
+from typing import Union
 
-from intuitlib.client    import AuthClient
-from intuitlib.enums     import Scopes
-from intuitlib.migration import migrate
-from io                  import StringIO
-from urllib.parse        import urlparse, parse_qs
+from intuitlib.client import AuthClient
+from intuitlib.enums import Scopes
 
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass, void, returns
 from finoptimal.utilities import retry
@@ -54,7 +51,18 @@ class QBAuth2(LoggedClass):
         Scopes.PHONE,
         Scopes.PROFILE
     ]
-        
+
+    @property
+    def caller(self) -> Union[str, None]:
+        """The name of the process responsible for this instance."""
+        if not hasattr(self, '_caller'):
+            try:
+                self._caller = os.path.split(sys.argv[0])[-1]
+            except Exception:
+                self._caller = None
+
+        return self._caller
+
     def _setup(self):
         if self.client_id is None or self.client_secret is None:
             raise Exception(
@@ -91,10 +99,10 @@ class QBAuth2(LoggedClass):
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
 
         try:
-            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
                   f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
         except Exception as ex:
-            msg = f"{resp.__hash__()} - {resp.status_code} {resp.reason} - " \
+            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
                   f"{resp.request.method.ljust(4)} {resp.url} - None"
 
         # self.info(msg)
