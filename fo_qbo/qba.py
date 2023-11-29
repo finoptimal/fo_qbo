@@ -14,8 +14,13 @@ from intuitlib.enums import Scopes
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass, void, returns
 from finoptimal.utilities import retry
 
+import google.cloud.logging as logging_gcp
+
 logger = get_logger(__name__)
-api_logger = get_file_logger('api/qbo')
+
+client = logging_gcp.Client()
+api_logger = client.logger('api-qbo')
+# api_logger = get_file_logger('api/qbo')
 
 CALLBACK_URL      = "http://a.b.com"
 
@@ -106,7 +111,7 @@ class QBAuth2(LoggedClass):
                   f"{resp.request.method.ljust(4)} {resp.url} - None"
 
         # self.info(msg)
-        api_logger.info(msg)
+        api_logger.log(msg)
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
@@ -200,7 +205,7 @@ class QBAuth2(LoggedClass):
         self.new_token         = True
         self.new_refresh_token = True
 
-    @retry(delay_secs=30)
+    # @retry(delay_secs=30)
     @logger.timeit(**void)
     def refresh(self):
         # if self.vb > 2:
