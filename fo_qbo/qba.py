@@ -14,8 +14,14 @@ from intuitlib.enums import Scopes
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass, void, returns
 from finoptimal.utilities import retry
 
+import google.cloud.logging as logging_gcp
+
 logger = get_logger(__name__)
-api_logger = get_file_logger('api/qbo')
+
+client = logging_gcp.Client()
+api_logger = client.logger('api-qbo')
+token_logger = client.logger('tokens-qbo')
+# api_logger = get_file_logger('api/qbo')
 
 CALLBACK_URL      = "http://a.b.com"
 
@@ -23,7 +29,8 @@ CALLBACK_URL      = "http://a.b.com"
 class QBAuth2(LoggedClass):    
     def __init__(self, client_id, client_secret,  realm_id=None,
                  refresh_token=None, access_token=None,
-                 callback_url=CALLBACK_URL, verbosity=0, env=None):
+                 callback_url=CALLBACK_URL, verbosity=0, env=None,
+                 client_code=None, business_context=None):
         self.client_id           = client_id
         self.client_secret       = client_secret
         self.refresh_token       = refresh_token
@@ -36,6 +43,8 @@ class QBAuth2(LoggedClass):
         self.new_token           = False
         self.new_refresh_token   = False
         self.callback_url        = callback_url
+        self.client_code         = client_code if client_code else ''
+        self.business_context    = business_context if business_context else ''
 
         self._setup()
 
@@ -97,16 +106,32 @@ class QBAuth2(LoggedClass):
             self.print("QBA headers", _headers)
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
+        status_code = str(resp.status_code)
+        method = str(resp.request.method.ljust(4))
+        reason = str(resp.reason)
+        response_url = str(resp.url)
 
         try:
-            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
         except Exception as ex:
-            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - None"
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - None")
 
         # self.info(msg)
-        api_logger.info(msg)
+        api_logger.log(
+            msg,
+            labels={
+                'client_code': self.client_code,
+                'context': self.business_context,
+                'caller': self.caller,
+                'method': method,
+                'status_code': status_code,
+                'reason': reason,
+                'url': response_url,
+                'realm_id': self.realm_id
+           }
+        )
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
@@ -206,12 +231,34 @@ class QBAuth2(LoggedClass):
         # if self.vb > 2:
         self.info(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
 
+        token_logger.log(
+            f"Refreshing {self.realm_id}'s refresh and access tokens!",
+            labels={
+                'context': self.business_context,
+                'client_code': self.client_code,
+                'caller': self.caller,
+                'realm_id': self.realm_id
+            }
+        )
+
         self.session.refresh()
         self.access_token  = self.session.access_token
         self.refresh_token = self.session.refresh_token
 
         self.info(f'New access token for realm id {self.realm_id}: {self.access_token}')
         self.info(f'New refresh token for realm id {self.realm_id}: {self.refresh_token}')
+
+        token_logger.log(
+            f'New tokens for {self.realm_id}',
+            labels={
+                'refresh_token': self.refresh_token,
+                'access_token': self.access_token,
+                'context': self.business_context,
+                'client_code': self.client_code,
+                'caller': self.caller,
+                'realm_id': self.realm_id
+            },
+        )
 
         if self.vb > 2:
             self.print("  Success!\n")
