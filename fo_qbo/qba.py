@@ -14,8 +14,13 @@ from intuitlib.enums import Scopes
 from finoptimal.logging import get_logger, get_file_logger, LoggedClass, void, returns
 from finoptimal.utilities import retry
 
+import google.cloud.logging as logging_gcp
+
 logger = get_logger(__name__)
-api_logger = get_file_logger('api/qbo')
+client = logging_gcp.Client()
+api_logger = client.logger('api-qbo')
+token_logger = client.logger('tokens-qbo')
+# api_logger = get_file_logger('api/qbo')
 
 CALLBACK_URL      = "http://a.b.com"
 
@@ -23,7 +28,8 @@ CALLBACK_URL      = "http://a.b.com"
 class QBAuth2(LoggedClass):    
     def __init__(self, client_id, client_secret,  realm_id=None,
                  refresh_token=None, access_token=None,
-                 callback_url=CALLBACK_URL, verbosity=0, env=None):
+                 callback_url=CALLBACK_URL, verbosity=0, env=None,
+                 client_code=None, business_context=None):
         self.client_id           = client_id
         self.client_secret       = client_secret
         self.refresh_token       = refresh_token
@@ -36,6 +42,8 @@ class QBAuth2(LoggedClass):
         self.new_token           = False
         self.new_refresh_token   = False
         self.callback_url        = callback_url
+        self.client_code         = client_code if client_code else ''
+        self.business_context    = business_context if business_context else ''
 
         self._setup()
 
@@ -97,13 +105,17 @@ class QBAuth2(LoggedClass):
             self.print("QBA headers", _headers)
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
-
+        status_code = str(resp.status_code)
+        method = str(resp.request.method.ljust(4))
+        reason = str(resp.reason)
+        response_url = str(resp.url)
+        
         try:
-            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}"
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
         except Exception as ex:
-            msg = f"{resp.__hash__()} - {self.caller} - {resp.status_code} {resp.reason} - " \
-                  f"{resp.request.method.ljust(4)} {resp.url} - None"
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - None")
 
         # self.info(msg)
         try:

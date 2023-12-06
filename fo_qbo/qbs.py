@@ -88,7 +88,8 @@ class QBS(LoggedClass):
             access_token=None, access_token_secret=None, company_id=None,
             callback_url=None, expires_at=None,
             new_token_callback_function=None, minor_api_version=None,
-            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0):
+            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0,
+            client_code=None, business_context=None):
         """
         This only works with a single company_id at a time.
 
@@ -134,6 +135,8 @@ class QBS(LoggedClass):
         
         self.mav   = minor_api_version
         self.vb    = verbosity
+        self.client_code = client_code
+        self.business_context = business_context
 
         self._setup()
 
@@ -162,7 +165,9 @@ class QBS(LoggedClass):
             access_token=self.at,
             callback_url=self.cbu,
             verbosity=self.vb,
-            env=self.qbo_env
+            env=self.qbo_env,
+            client_code=self.client_code,
+            business_context=self.business_context
         )
 
         if self.cid is None:
