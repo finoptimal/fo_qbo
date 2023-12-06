@@ -88,8 +88,7 @@ class QBS(LoggedClass):
             access_token=None, access_token_secret=None, company_id=None,
             callback_url=None, expires_at=None,
             new_token_callback_function=None, minor_api_version=None,
-            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0,
-            client_code=None, business_context=None):
+            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0):
         """
         This only works with a single company_id at a time.
 
@@ -121,20 +120,20 @@ class QBS(LoggedClass):
                 "Could not create connection to QB API, not enough credentials")
 
         # Oauth 2
-        self.cli = client_id
-        self.cls = client_secret
-        self.rt = refresh_token
-        self.exa = expires_at
-        self.rtaa = rt_acquired_at
+        self.cli   = client_id
+        self.cls   = client_secret
+        self.rt    = refresh_token
+        self.exa   = expires_at
+        self.rtaa  = rt_acquired_at
         self.ntcbf = new_token_callback_function
-        self.at = access_token
-        self.cid = company_id
-        self.rlc = reload_credentials_callback
-        self.cbu = callback_url
-        self.mav = minor_api_version
-        self.vb = verbosity
-        self.client_code = client_code
-        self.business_context = business_context
+        self.at    = access_token
+        self.cid   = company_id
+        self.rlc   = reload_credentials_callback
+        
+        self.cbu   = callback_url
+        
+        self.mav   = minor_api_version
+        self.vb    = verbosity
 
         self._setup()
 
@@ -163,9 +162,7 @@ class QBS(LoggedClass):
             access_token=self.at,
             callback_url=self.cbu,
             verbosity=self.vb,
-            env=self.qbo_env,
-            client_code=self.client_code,
-            business_context=self.business_context
+            env=self.qbo_env
         )
 
         if self.cid is None:
