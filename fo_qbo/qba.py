@@ -106,7 +106,23 @@ class QBAuth2(LoggedClass):
                   f"{resp.request.method.ljust(4)} {resp.url} - None"
 
         # self.info(msg)
-        api_logger.info(msg)
+        try:
+            api_logger.log(
+                msg[:5000],
+                labels={
+                    'client_code': self.client_code,
+                    'context': self.business_context,
+                    'caller': self.caller,
+                    'method': method,
+                    'status_code': status_code,
+                    'reason': reason,
+                    'url': response_url,
+                    'realm_id': self.realm_id
+               }
+            )
+        except Exception:
+            self.exception()
+            self.info(msg)
 
         if resp.status_code == 401:
             if not hasattr(self, "_attempts"):
@@ -206,12 +222,40 @@ class QBAuth2(LoggedClass):
         # if self.vb > 2:
         self.info(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
 
+        try:
+            token_logger.log(
+                f"Refreshing {self.realm_id}'s refresh and access tokens!",
+                labels={
+                    'context': self.business_context,
+                    'client_code': self.client_code,
+                    'caller': self.caller,
+                    'realm_id': self.realm_id
+                }
+            )
+        except Exception:
+            self.exception()
+
         self.session.refresh()
         self.access_token  = self.session.access_token
         self.refresh_token = self.session.refresh_token
 
         self.info(f'New access token for realm id {self.realm_id}: {self.access_token}')
         self.info(f'New refresh token for realm id {self.realm_id}: {self.refresh_token}')
+
+        try:
+            token_logger.log(
+                f'New tokens for {self.realm_id}',
+                labels={
+                    'refresh_token': self.refresh_token,
+                    'access_token': self.access_token,
+                    'context': self.business_context,
+                    'client_code': self.client_code,
+                    'caller': self.caller,
+                    'realm_id': self.realm_id
+                },
+            )
+        except Exception:
+            self.exception()
 
         if self.vb > 2:
             self.print("  Success!\n")
