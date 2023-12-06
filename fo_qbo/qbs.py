@@ -121,18 +121,20 @@ class QBS(LoggedClass):
                 "Could not create connection to QB API, not enough credentials")
 
         # Oauth 2
-        self.cli = client_id
-        self.cls = client_secret
-        self.rt = refresh_token
-        self.exa = expires_at
-        self.rtaa = rt_acquired_at
+        self.cli   = client_id
+        self.cls   = client_secret
+        self.rt    = refresh_token
+        self.exa   = expires_at
+        self.rtaa  = rt_acquired_at
         self.ntcbf = new_token_callback_function
-        self.at = access_token
-        self.cid = company_id
-        self.rlc = reload_credentials_callback
-        self.cbu = callback_url
-        self.mav = minor_api_version
-        self.vb = verbosity
+        self.at    = access_token
+        self.cid   = company_id
+        self.rlc   = reload_credentials_callback
+        
+        self.cbu   = callback_url
+        
+        self.mav   = minor_api_version
+        self.vb    = verbosity
         self.client_code = client_code
         self.business_context = business_context
 

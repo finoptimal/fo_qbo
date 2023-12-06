@@ -17,7 +17,6 @@ from finoptimal.utilities import retry
 import google.cloud.logging as logging_gcp
 
 logger = get_logger(__name__)
-
 client = logging_gcp.Client()
 api_logger = client.logger('api-qbo')
 token_logger = client.logger('tokens-qbo')
