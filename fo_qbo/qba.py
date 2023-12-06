@@ -109,7 +109,7 @@ class QBAuth2(LoggedClass):
         method = str(resp.request.method.ljust(4))
         reason = str(resp.reason)
         response_url = str(resp.url)
-
+        
         try:
             msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
                    f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
