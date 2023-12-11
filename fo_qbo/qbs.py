@@ -19,6 +19,8 @@ import time
 from base64 import b64encode
 from typing import Union, Optional
 
+import google.cloud.logging as logging_gcp
+
 import requests
 from django.conf import settings
 from finoptimal import environment
@@ -27,7 +29,10 @@ from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
 logger = get_logger(__name__)
-api_logger = get_file_logger('api/qbo')
+
+client = logging_gcp.Client()
+api_logger = client.logger('api-qbo')
+# api_logger = get_file_logger('api/qbo')
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
@@ -121,22 +126,22 @@ class QBS(LoggedClass):
                 "Could not create connection to QB API, not enough credentials")
 
         # Oauth 2
-        self.cli   = client_id
-        self.cls   = client_secret
-        self.rt    = refresh_token
-        self.exa   = expires_at
-        self.rtaa  = rt_acquired_at
+        self.cli = client_id
+        self.cls = client_secret
+        self.rt = refresh_token
+        self.exa = expires_at
+        self.rtaa = rt_acquired_at
         self.ntcbf = new_token_callback_function
-        self.at    = access_token
-        self.cid   = company_id
-        self.rlc   = reload_credentials_callback
+        self.at = access_token
+        self.cid = company_id
+        self.rlc = reload_credentials_callback
         
-        self.cbu   = callback_url
+        self.cbu = callback_url
         
-        self.mav   = minor_api_version
-        self.vb    = verbosity
-        self.client_code = client_code
-        self.business_context = business_context
+        self.mav = minor_api_version
+        self.vb = verbosity
+        self.client_code = client_code if client_code else ''
+        self.business_context = business_context if business_context else ''
 
         self._setup()
 
@@ -794,13 +799,35 @@ class QBS(LoggedClass):
         handle    = open(path, "wb")
 
         resp = requests.get(link, timeout=60)
+        status_code = str(resp.status_code)
+        method = str(resp.request.method.ljust(4))
+        reason = str(resp.reason)
+        response_url = str(resp.url)
 
         try:
-            api_logger.info(f"{resp.__hash__()} - {self.qba.caller} - {resp.status_code} {resp.reason} - "
-                            f"{resp.request.method.ljust(4)} {resp.url} - {resp.json()}")
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
         except Exception as ex:
-            api_logger.info(f"{resp.__hash__()} - {self.qba.caller} - {resp.status_code} {resp.reason} - "
-                            f"{resp.request.method.ljust(4)} {resp.url} - None")
+            msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
+                   f"{status_code} {reason} - {method} {response_url} - None")
+
+        try:
+            api_logger.log(
+                msg[:5000],
+                labels={
+                    'client_code': self.client_code,
+                    'context': self.business_context,
+                    'caller': self.caller,
+                    'method': method,
+                    'status_code': status_code,
+                    'reason': reason,
+                    'url': response_url,
+                    'realm_id': self.realm_id
+                }
+            )
+        except Exception:
+            self.exception()
+            self.info(msg)
 
         for chunk in resp.iter_content(1024):
             handle.write(chunk)
@@ -859,3 +886,11 @@ class QBS(LoggedClass):
             print(error)
             import ipdb;ipdb.set_trace()
             raise Exception(error)
+
+    @property
+    def caller(self) -> str:
+        return self.qba.caller
+
+    @property
+    def realm_id(self) -> str:
+        return self.qba.realm_id
