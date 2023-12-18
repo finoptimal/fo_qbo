@@ -4,6 +4,7 @@ QBO Rest API Client
 Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
 """
 import os
+import json
 import requests
 import sys
 from typing import Union
@@ -104,6 +105,25 @@ class QBAuth2(LoggedClass):
             
         if self.vb > 19:
             self.print("QBA headers", _headers)
+
+        msg = f'Making {request_type.upper()} request to {url}'
+
+        try:
+            api_logger.log(
+                msg,
+                labels={
+                    'client_code': self.client_code,
+                    'context': self.business_context,
+                    'caller': self.caller,
+                    'method': request_type.upper(),
+                    'url': url,
+                    'realm_id': self.realm_id,
+                    'data': json.dumps(data)[:5000]
+                }
+            )
+        except Exception:
+            self.exception()
+            self.info(msg)
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
         status_code = str(resp.status_code)
