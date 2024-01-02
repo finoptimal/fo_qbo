@@ -109,6 +109,7 @@ class QBS(LoggedClass):
         self.api_base_url = self.SANDBOX_API_URL \
             if self.qbo_env == "sandbox" \
             else self.PRODUCTION_API_URL
+        # self.api_base_url = self.PRODUCTION_API_URL
 
         # possibly needed for backwards compatability
         self.API_BASE_URL = self.api_base_url
@@ -234,8 +235,7 @@ class QBS(LoggedClass):
         if isinstance(data, str):
             original_data = data + ""
             
-        if "minorversion" not in params.get("params", {}) and \
-           self.mav is not None:
+        if "minorversion" not in params.get("params", {}) and self.mav is not None:
             if "params" not in params:
                 params["params"] = {}
 
@@ -244,19 +244,18 @@ class QBS(LoggedClass):
         if "download" in url:
             headers = {}
         elif "/pdf" == url[-4:]:
-            headers = {"content-type" : "application/pdf"}
+            headers = {"content-type": "application/pdf"}
 
         if request_type.lower() in ["post"]:
             if url[-4:] == "send":
-                headers.update({"Content-Type" : "application/octet-stream"})
+                headers.update({"Content-Type": "application/octet-stream"})
 
             elif isinstance(data, dict):
-                orig_data = data.copy() # For Troubleshooting
+                orig_data = data.copy()  # For Troubleshooting
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
                     data    = data["request_body"] + ""    # should be text
-                    # data    = data["request_body"].encode("utf-8")
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
@@ -288,12 +287,12 @@ class QBS(LoggedClass):
                 ipdb.set_trace()
 
         self.last_call = {
-            "request_type" : request_type.upper(),
-            "url"          : url,
-            "realm"        : self.cid,
-            "header"       : headers,
-            "data"         : data,
-            "params"       : params}
+            "request_type": request_type.upper(),
+            "url"         : url,
+            "realm"       : self.cid,
+            "header"      : headers,
+            "data"        : data,
+            "params"      : params}
 
         established_access = False
         tries_remaining    = 2
@@ -329,24 +328,13 @@ class QBS(LoggedClass):
             **params
         )
 
-        # try:
-        #     api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
-        #                     f"{response.request.method.ljust(4)} {response.url} - {response.json()}")
-        # except Exception as ex:
-        #     try:
-        #         api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
-        #                         f"{response.request.method.ljust(4)} {response.url} - None")
-        #     except:
-        #         pass
-
         self.last_response = response
 
         if not hasattr(self, "resps"):
             self.resps = collections.OrderedDict()
 
         # For troubleshooting
-        self.resps[response.headers["intuit_tid"]] = (
-            response.request.url, response.request.body, response)
+        self.resps[response.headers["intuit_tid"]] = (response.request.url, response.request.body, response)
         
         if self.vb > 7:
             self.print("The final URL (with params):")
@@ -395,17 +383,16 @@ class QBS(LoggedClass):
         if not self.qba.new_token:
             return False
         
-        self.exa = str(
-            datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
+        self.exa = str(datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
         self.cid = self.qba.realm_id
         self.at  = self.qba.access_token
         self.rt  = self.qba.refresh_token
 
         updater  = {
-            "access_token"  : self.at,
-            "refresh_token" : self.rt,
-            "expires_at"    : self.exa,
-            "company_id"    : self.cid
+            "access_token" : self.at,
+            "refresh_token": self.rt,
+            "expires_at"   : self.exa,
+            "company_id"   : self.cid
         }
 
         self.info('New credentials!')
@@ -424,8 +411,7 @@ class QBS(LoggedClass):
 
         else:
             if self.vb > 1:
-                self.print("You're refresh token and access token are new.",
-                           "Store the new credentials!")
+                self.print("You're refresh token and access token are new. Store the new credentials!")
 
         return True
 
@@ -679,9 +665,9 @@ class QBS(LoggedClass):
         return raw
 
     BAD_CHARS = {
-        '\u2010' : "-",
-        '\u2013' : "-",
-        '\uff0c' : ", ",
+        '\u2010': "-",
+        '\u2013': "-",
+        '\uff0c': ", ",
     }
 
     @logger.timeit(**returns)
@@ -706,7 +692,6 @@ class QBS(LoggedClass):
         """
         url       = f"{self.API_BASE_URL}/{self.cid}/upload"
         loc, name = os.path.split(path)
-        #base, ext = name.rsplit(".", 1)
         base, ext = os.path.splitext(name)
         mime_type = self.ATTACHABLE_MIME_TYPES.get(ext.lower())
 
@@ -733,7 +718,7 @@ class QBS(LoggedClass):
         if attach_to_object_type and attach_to_object_id:
             jd.update({
                 "AttachableRef" : [
-                    {"EntityRef" : {
+                    {"EntityRef": {
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},
                      "IncludeOnSend" : include_on_send},],})
@@ -764,8 +749,8 @@ class QBS(LoggedClass):
             request_body = request_body.replace(ky, vl)
         
         data = {
-            "headers"      : headers.copy(),
-            "request_body" : request_body
+            "headers"     : headers.copy(),
+            "request_body": request_body
         }
         self.touchless_test()
         return self._basic_call(request_type="POST", url=url, data=data)
