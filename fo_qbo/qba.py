@@ -26,7 +26,17 @@ token_logger = client.logger('tokens-qbo')
 CALLBACK_URL      = "http://a.b.com"
 
 
-class QBAuth2(LoggedClass):    
+class QBAuth2(LoggedClass):
+
+    SCOPES = [
+        Scopes.ACCOUNTING,
+        Scopes.ADDRESS,
+        Scopes.EMAIL,
+        Scopes.OPENID,
+        Scopes.PHONE,
+        Scopes.PROFILE
+    ]
+
     def __init__(self, client_id, client_secret,  realm_id=None,
                  refresh_token=None, access_token=None,
                  callback_url=CALLBACK_URL, verbosity=0, env=None,
@@ -49,18 +59,7 @@ class QBAuth2(LoggedClass):
 
         self._setup()
 
-    SCOPES = [
-        Scopes.ACCOUNTING,
-        Scopes.ADDRESS,
-        Scopes.EMAIL,
-        # Scopes.INTUIT_NAME,
-        Scopes.OPENID,
-        # Scopes.PAYMENT,
-        # Scopes.PAYROLL,
-        # Scopes.PAYROLL_TIMETRACKING,
-        Scopes.PHONE,
-        Scopes.PROFILE
-    ]
+
 
     @property
     def caller(self) -> Union[str, None]:
@@ -222,11 +221,10 @@ class QBAuth2(LoggedClass):
         self.print(" their QBO data:\n")
         self.print(self.authorize_url)
 
-        authorized_callback_url     = None
+        authorized_callback_url = None
 
         while not authorized_callback_url:
-            authorized_callback_url = input(
-                "\nPaste the entire callback URL back here (or ctrl-c):")
+            authorized_callback_url = input("\nPaste the entire callback URL back here (or ctrl-c):")
 
         self.handle_authorized_callback_url(authorized_callback_url)
 

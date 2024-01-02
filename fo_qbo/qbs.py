@@ -84,6 +84,16 @@ class QBS(LoggedClass):
     UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
     ATTACHABLE_MIME_TYPES     = MIME_TYPES
 
+    BAD_CHARS = {
+        '\u2010': "-",
+        '\u2013': "-",
+        '\uff0c': ", ",
+    }
+
+    ALIASES = {
+        "CreditCardPayment": "CreditCardPaymentTxn",
+    }
+
     def __init__(
             self,
             # oauth 1:
@@ -415,10 +425,6 @@ class QBS(LoggedClass):
 
         return True
 
-    ALIASES = {
-        "CreditCardPayment": "CreditCardPaymentTxn",  # Why, Intuit?!
-    }
-
     @logger.timeit(**returns)
     def query(self,
               object_type: str,
@@ -663,12 +669,6 @@ class QBS(LoggedClass):
             self.print('(raw["Header"] is above)')
 
         return raw
-
-    BAD_CHARS = {
-        '\u2010': "-",
-        '\u2013': "-",
-        '\uff0c': ", ",
-    }
 
     @logger.timeit(**returns)
     def upload(self, path, attach_to_object_type=None,
