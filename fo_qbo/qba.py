@@ -319,8 +319,7 @@ class QBAuth2(LoggedClass):
         self._refresh_credential_attributes()
 
     @logger.timeit(**returns, expand=True)
-    def request(self, request_type, url, header_auth=True, realm='',
-                verify=True, headers=None, data=None, **params):
+    def request(self, request_type, url, header_auth=True, realm='', verify=True, headers=None, data=None, **params):
         """
         We don't handle authorization until the session's first request happens.
         """
