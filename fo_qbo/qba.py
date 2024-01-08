@@ -11,6 +11,7 @@ import sys
 from typing import Union, Optional
 
 from intuitlib.client import AuthClient
+from intuitlib.exceptions import AuthClientError
 from intuitlib.enums import Scopes
 
 from finoptimal.logging import get_logger, LoggedClass, void, returns
@@ -18,6 +19,7 @@ from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
 
 import google.cloud.logging as logging_gcp
+from google.cloud.logging import DESCENDING
 
 logger = get_logger(__name__)
 
@@ -94,9 +96,10 @@ class QBAuth2(LoggedClass):
         )
 
         if self.realm_id is None:
+            # If we don't have a realm_id, we don't have credentials for this client.
             self.establish_access()
             self.save_new_tokens()
-            self._refresh_credential_attributes()
+            self.reload_credentials()
 
         self._login()
 
@@ -110,7 +113,7 @@ class QBAuth2(LoggedClass):
         if not hasattr(self, '_initial_access_token'):
             self._initial_access_token = self.access_token
 
-            if self.expires_at < str(datetime.datetime.utcnow()):
+            if self.expires_at and self.expires_at < str(datetime.datetime.utcnow()):
                 self._initial_access_token = None
                 self.info(f"\n{self.realm_id}'s access_token has expired; not passing to AuthClient")
 
@@ -289,29 +292,29 @@ class QBAuth2(LoggedClass):
 
         return self._logged_in
 
-    def save_new_tokens(self) -> bool:
-        """Returns True if new token(s) were saved to the Google Cloud bucket."""
-        if not self.new_token:
-            return False
-
-        self._expires_at = str(datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
-
-        new_credentials = {
+    @property
+    def active_credentials(self) -> dict:
+        return {
             'access_token': self.access_token,
             'refresh_token': self.refresh_token,
             'expires_at': self.expires_at,
             'company_id': self.realm_id
         }
 
-        self.info(f'New credentials: {new_credentials}')
+    def save_new_tokens(self) -> None:
+        if self.new_token:
+            self._expires_at = str(datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
 
-        if self.new_refresh_token:
-            new_credentials['rt_acquired_at'] = str(datetime.datetime.utcnow())
+            new_credentials = self.active_credentials.copy()
+            self.info(f'New credentials: {new_credentials}')
 
-        self.credentials = new_credentials
-        self.new_token = False
-        self.new_refresh_token = False
-        return True
+            if self.new_refresh_token:
+                new_credentials['rt_acquired_at'] = str(datetime.datetime.utcnow())
+
+            self.credentials = new_credentials
+
+            self.new_token = False
+            self.new_refresh_token = False
 
     def reload_credentials(self) -> None:
         """Reload credentials from the Google Cloud bucket and reset the related attributes."""
@@ -387,15 +390,18 @@ class QBAuth2(LoggedClass):
             self.info(msg)
 
         if resp.status_code == 401:
-            if not hasattr(self, "_attempts"):
-                self._attempts  = 1
-            else:
-                self._attempts += 1
-
-            if self._attempts > 3:
-                raise Exception(resp.text)
-                
             self.refresh()
+
+            self.request(
+                request_type,
+                url,
+                header_auth=header_auth,
+                realm=realm,
+                verify=verify,
+                headers=headers,
+                data=data,
+                **params
+            )
             
         if self.vb > 10:
             self.print("response code:", resp.status_code)
@@ -405,8 +411,8 @@ class QBAuth2(LoggedClass):
     @logger.timeit(**void)
     def establish_access(self) -> None:
         """
-        This is called at the beginning of every request in QBS. Though, after the first successful call, this method
-        should exit immediately. If we don't start with a refresh and access token, we will attempt to get those here.
+        This is called at the beginning of every request. Looks to me like this was simply meant to establish the
+        initial connection, whether that be an access_token refresh or oob().
         """
         if getattr(self, "_has_access", False):
             return
@@ -417,6 +423,9 @@ class QBAuth2(LoggedClass):
                 self._has_access = False
                 return
 
+            # If executed successfully, this will save the access and refresh tokens to the session/instance. We aren't
+            # saving the credentials to GCP immediately, though, that happens in QBS... I think we can structure this
+            # much better. TODO
             self.oob()
 
         if self.access_token is None:
@@ -425,7 +434,7 @@ class QBAuth2(LoggedClass):
             try:
                 self.refresh()
             except Exception:
-                self.refresh_failure = True
+                # Now we expect refresh() to handle ALL AuthClientErrors internally, so we WILL raise an exception here.
                 raise
         
         self._has_access = True
@@ -450,7 +459,7 @@ class QBAuth2(LoggedClass):
     def handle_authorized_callback_url(self, url):
         tail = url.split("?")[1].strip()
         params = dict([tuple(param.split("=")) for param in tail.split("&")])
-        self.session.get_bearer_token(params['cold'])
+        self.session.get_bearer_token(params['code'])
         self._realm_id = params["realmId"]
         self._access_token = self.session.access_token
         self._refresh_token = self.session.refresh_token
@@ -498,26 +507,146 @@ class QBAuth2(LoggedClass):
         except Exception:
             self.exception()
 
-    # @retry(max_tries=2, delay_secs=5)  # I think we have enough retries baked in already...
+    def log_token_fix(self, from_log: bool) -> None:
+        if from_log:
+            msg = f'Fixed {self.client_code} AuthClientError using GCP logs'
+        else:
+            msg = f'Fixed {self.client_code} AuthClientError using GCP bucket'
+
+        self.info(msg)
+
+        try:
+            token_logger.log(
+                msg,
+                labels={
+                    'refresh_token': self.refresh_token,
+                    'access_token': self.access_token,
+                    'context': self.business_context,
+                    'client_code': self.client_code,
+                    'caller': self.caller,
+                    'realm_id': self.realm_id
+                },
+            )
+        except Exception:
+            self.exception()
+
+    @retry(max_tries=3, delay_secs=5, exceptions=(AuthClientError, ))
     @logger.timeit(**void)
-    def refresh(self):
+    def refresh(self) -> None:
         self.log_pending_token_event()
 
-        self.session.refresh()
-        self._access_token  = self.session.access_token
-        self._refresh_token = self.session.refresh_token
+        try:
+            self.session.refresh()
 
-        self.log_token_event_outcome()
+        except AuthClientError:
+            self.exception()
 
-        self.new_token = True
+            if self.fixed_by_reloading_credentials():
+                # Both instance and session attributes were updated, no need to update GCP
+                self.log_token_fix(from_log=False)
+
+            elif self.fixed_by_loading_from_log():
+                # Instance and session and GCP attributes were updated
+                self.log_token_fix(from_log=True)
+
+            else:
+                raise
+
+            return
+
+        else:
+            self.new_token = True
+            self._access_token  = self.session.access_token
+            self._refresh_token = self.session.refresh_token
+            self.save_new_tokens()
+            self.log_token_event_outcome()
 
     @logger.timeit(**void)
     def disconnect(self):
         self.print(f"Disconnecting {self.realm_id}'s access token!")
-        resp = self.session.revoke(token=self.refresh_token)
-        self.print(resp)
+        try:
+            self.session.revoke(token=self.refresh_token)
+        except Exception as e:
+            if e.status_code == 400:
+                pass
+            else:
+                raise
+
         self._logged_in = False
         self._delete_credentials()
-        
+
+    def get_token_log_entries(self) -> list:
+        lookback_period = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat().split('.')[0] + 'Z'
+
+        filters = ' AND '.join([
+            f'labels.client_code="{self.client_code}"',
+            'labels.access_token!= null',
+            f'timestamp>"{lookback_period}"'
+        ])
+
+        log_entries = token_logger.list_entries(filter_=filters, order_by=DESCENDING, max_results=3)
+
+        return [entry for entry in log_entries]
+
+    def get_latest_tokens_from_log(self) -> dict:
+        tokens = {
+            'access_token': None,
+            'refresh_token': None,
+            'expires_at': None
+        }
+        entries = self.get_token_log_entries()
+
+        if len(entries) > 0:
+            latest_entry = entries[0]
+            tokens['access_token'] = latest_entry.labels.get('access_token')
+            tokens['refresh_token'] = latest_entry.labels.get('refresh_token')
+            tokens['expires_at'] = str(latest_entry.timestamp + datetime.timedelta(minutes=58)).split('+')[0]
+
+        return tokens
+
+    def fixed_by_reloading_credentials(self) -> bool:
+        """Returns True if the AuthClientError was fixed by reloading credentials from Google Cloud."""
+        fixed = False
+        # Get a reference to the current value so that we can compare after we reload the credentials
+        expires_at = self.expires_at
+
+        self.reload_credentials()
+
+        if not self.expires_at:
+            # We must not have any credentials, so we can't fix here
+            return False
+
+        if (expires_at and expires_at < self.expires_at) or (not expires_at):
+            # Either we are able to compare the access token expiration dates, or we assume we can fix the problem
+            # because we didn't have an expiration before and now we do.
+            for token in ['access_token', 'refresh_token']:
+                if getattr(self, token) != getattr(self.session, token):
+                    setattr(self.session, token, getattr(self, token))
+                    fixed = True
+
+        return fixed
+
+    def fixed_by_loading_from_log(self) -> bool:
+        fixed = False
+        token_dict = self.get_latest_tokens_from_log()
+        access_token = token_dict.get('access_token')
+        refresh_token = token_dict.get('refresh_token')
+        expires_at = token_dict.get('expires_at')
+
+        if access_token != self.access_token and (not self.expires_at or expires_at >= self.expires_at):
+            fixed = True
+            self._access_token = access_token
+            self._expires_at = expires_at
+            self.session.access_token = access_token
+
+            if refresh_token != self.refresh_token:
+                self._refresh_token = refresh_token
+                self.session.refresh_token = refresh_token
+
+            # This actually saves the credentials to GCP
+            self.credentials = self.active_credentials
+
+        return fixed
+
     def __repr__(self):
         return "<QBAuth (Oauth Version 2)>"
