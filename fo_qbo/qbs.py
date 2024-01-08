@@ -238,29 +238,31 @@ class QBS(LoggedClass):
             "data"        : data,
             "params"      : params}
 
-        established_access = False
-        tries_remaining    = 2
+        # established_access = False
+        # tries_remaining    = 2
+        #
+        # while not established_access:
+        #     # Handle a situation where one instance loads up credentials that
+        #     #  an earlier instance is ABOUT to blow away (because of a token
+        #     #  refresh).
+        #     try:
+        #         self.qba.establish_access()
+        #     except:
+        #         if not hasattr(self.qba, "refresh_failure"):
+        #             raise
+        #
+        #         if self.qba.refresh_failure:
+        #             tries_remaining -= 1
+        #             self.qba.reload_credentials()
+        #
+        #         if tries_remaining > 0:
+        #             continue
+        #
+        #         raise
+        #     else:
+        #         break
 
-        while not established_access:
-            # Handle a situation where one instance loads up credentials that
-            #  an earlier instance is ABOUT to blow away (because of a token
-            #  refresh).
-            try:
-                self.qba.establish_access()
-            except:
-                if not hasattr(self.qba, "refresh_failure"):
-                    raise
-                
-                if self.qba.refresh_failure:
-                    tries_remaining -= 1
-                    self.qba.reload_credentials()
-
-                if tries_remaining > 0:
-                    continue
-
-                raise
-            else:
-                break
+        # Up to this point we are just building the request parameters and troubleshooting utilities
 
         response = self.qba.request(
             request_type.upper(),
@@ -292,13 +294,14 @@ class QBS(LoggedClass):
 
         # This is here to retry the request when it ended on error because of an expired token.
         # self.qba.save_new_tokens() will return True if the session has new tokens AND they were saved.
-        if self.oauth_version == 2 and self.qba.save_new_tokens():
-            return self._basic_call(
-                request_type=request_type,
-                url=url,
-                data=original_data,
-                **original_params
-            )
+        # if self.oauth_version == 2 and self.qba.save_new_tokens():
+        #     import ipdb;ipdb.set_trace()
+        #     return self._basic_call(
+        #         request_type=request_type,
+        #         url=url,
+        #         data=original_data,
+        #         **original_params
+        #     )
                     
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
