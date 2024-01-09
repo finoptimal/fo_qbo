@@ -25,6 +25,8 @@ import requests
 from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
+from finoptimal.utilities import retry
+from fo_qbo.errors import RateLimitError
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
@@ -37,42 +39,42 @@ api_logger = client.logger('api-qbo')
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
 
-def retry(max_tries=2, delay_secs=0.2):
-    """
-    Produces a decorator which tries effectively the function it decorates
-     a given number of times. Because the QBO API has been known to respond
-     erratically (and, e.g., return "Unauthorized" errors erroneously), this
-     method takes a hammer-it approach to the problem (within reason).
-    """
-    def decorator(retriable_function):
-        def inner(*args, **kwargs):
-            """
-            Retries retriable_function max_tries times, waiting delay_secs
-             between tries (and increasing delay_secs geometrically by the
-             drag_factor). escape can be set to true during a run to get out
-             immediately if, e.g. ipdb is running.
-            """
-            tries  = kwargs.get("tries", max_tries)
-            delay  = kwargs.get("delay", delay_secs)
-
-            attempts = 0
-
-            while True:
-                try:
-                    return retriable_function(*args, **kwargs)
-                    break
-                except Exception as ex:
-                    tries    -= 1
-                    attempts += 1
-
-                    if tries <= 0:
-                        raise ex
-
-                    # back off as failures accumulate in case it's transient
-                    time.sleep(delay * attempts)
-
-        return inner
-    return decorator
+# def retry(max_tries=2, delay_secs=0.2):
+#     """
+#     Produces a decorator which tries effectively the function it decorates
+#      a given number of times. Because the QBO API has been known to respond
+#      erratically (and, e.g., return "Unauthorized" errors erroneously), this
+#      method takes a hammer-it approach to the problem (within reason).
+#     """
+#     def decorator(retriable_function):
+#         def inner(*args, **kwargs):
+#             """
+#             Retries retriable_function max_tries times, waiting delay_secs
+#              between tries (and increasing delay_secs geometrically by the
+#              drag_factor). escape can be set to true during a run to get out
+#              immediately if, e.g. ipdb is running.
+#             """
+#             tries  = kwargs.get("tries", max_tries)
+#             delay  = kwargs.get("delay", delay_secs)
+#
+#             attempts = 0
+#
+#             while True:
+#                 try:
+#                     return retriable_function(*args, **kwargs)
+#                     break
+#                 except Exception as ex:
+#                     tries    -= 1
+#                     attempts += 1
+#
+#                     if tries <= 0:
+#                         raise ex
+#
+#                     # back off as failures accumulate in case it's transient
+#                     time.sleep(delay * attempts)
+#
+#         return inner
+#     return decorator
 
 
 class QBS(LoggedClass):
@@ -166,7 +168,11 @@ class QBS(LoggedClass):
     def logged_in(self) -> bool:
         return self.qba.logged_in
 
-    @retry()
+    # I am removing the all-catching retry in favor of something more specific. This gives us better control over the
+    # behavior here. Additionally, it seems like that retry was built to handle transient AuthClientErrors, which we
+    # have since improved internally.
+
+    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
