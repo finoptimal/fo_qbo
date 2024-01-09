@@ -81,140 +81,90 @@ class QBS(LoggedClass):
     """
     PRODUCTION_API_URL = "https://quickbooks.api.intuit.com/v3/company"
     SANDBOX_API_URL = "https://sandbox-quickbooks.api.intuit.com/v3/company"
-    UNQUERIABLE_OBJECT_TYPES  = ["TaxService"]
-    ATTACHABLE_MIME_TYPES     = MIME_TYPES
+    UNQUERIABLE_OBJECT_TYPES = ["TaxService"]
+    ATTACHABLE_MIME_TYPES = MIME_TYPES
 
-    def __init__(
-            self,
-            # oauth 1:
-            consumer_key=None, consumer_secret=None, expires_on=None,
-            # oauth 2
-            client_id=None, client_secret=None, refresh_token=None, 
-            access_token=None, access_token_secret=None, company_id=None,
-            callback_url=None, expires_at=None,
-            new_token_callback_function=None, minor_api_version=None,
-            rt_acquired_at=None, reload_credentials_callback=None, verbosity=0,
-            client_code=None, business_context=None):
+    OAUTH_VERSION = 2
+
+    BAD_CHARS = {
+        '\u2010': "-",
+        '\u2013': "-",
+        '\uff0c': ", ",
+    }
+
+    ALIASES = {
+        "CreditCardPayment": "CreditCardPaymentTxn",
+    }
+
+    def __init__(self, client_code: str, verbosity: int = 0, modifier: Optional[str] = None):
         """
         This only works with a single company_id at a time.
 
-        You must pass in a client_id and client_secret, or
-        a refresh_token to bypass OOB authentication.
+        You must pass in a client_id and client_secret, or a refresh_token to bypass OOB authentication.
         """
         super().__init__()
+        self.client_code = client_code
+        self.vb = verbosity
 
         self.qbo_env = "sandbox" \
             if settings.configured and settings.DATABASES['default']['NAME'] != 'themagic' \
             else "production"
+
         self.api_base_url = self.SANDBOX_API_URL \
             if self.qbo_env == "sandbox" \
             else self.PRODUCTION_API_URL
+        # self.api_base_url = self.PRODUCTION_API_URL  # Local override
 
-        # possibly needed for backwards compatability
-        self.API_BASE_URL = self.api_base_url
-
-        if access_token_secret is not None:
-            # If there is no active OAuth1 access_tokens (and presumably, then,
-            #  no access_token_secret), we use OAuth2. The deprecated Py2
-            #  version of this wrapper is the only way to still get OAuth1
-            #  access tokens (which will become impossible in December, 2019)
-            self.oauth_version = 1
-        elif client_id is not None and client_secret is not None:
-            self.oauth_version = 2
-        else:
-            raise ValueError(
-                "Could not create connection to QB API, not enough credentials")
-
-        # Oauth 2
-        self.cli = client_id
-        self.cls = client_secret
-        self.rt = refresh_token
-        self.exa = expires_at
-        self.rtaa = rt_acquired_at
-        self.ntcbf = new_token_callback_function
-        self.at = access_token
-        self.cid = company_id
-        self.rlc = reload_credentials_callback
-        
-        self.cbu = callback_url
-        
-        self.mav = minor_api_version
-        self.vb = verbosity
-        self.client_code = client_code if client_code else ''
-        self.business_context = business_context if business_context else ''
-
-        self._setup()
+        self.API_BASE_URL = self.api_base_url  # For backwards compatibility
+        self.oauth_version = self.OAUTH_VERSION
+        self.qba = QBAuth2(client_code=self.client_code, modifier=modifier, verbosity=self.vb, env=self.qbo_env)
 
         if self.qbo_env == "sandbox":
             self.info(f'API_BASE_URL = {self.API_BASE_URL}')
 
-    @logger.timeit(**void)
-    def _setup(self):
-        """
-        Make sure the access_token is fresh (otherwise reconnect). If there's NO
-         access_token (and, of course, accompanying secret), go through the
-         connect workflow.
-        """
-        if self.exa is not None:
-            if self.exa < str(datetime.datetime.utcnow()):
-                if self.vb > 2:
-                    self.print(f"\n{self.cid}'s access_token has expired;",
-                               "not passing to QBA.\n")
-                self.at = None
+    @property
+    def mav(self) -> int:
+        return self.qba.minor_api_version
 
-        self.qba = QBAuth2(
-            self.cli,
-            self.cls,
-            realm_id=self.cid,
-            refresh_token=self.rt,
-            access_token=self.at,
-            callback_url=self.cbu,
-            verbosity=self.vb,
-            env=self.qbo_env,
-            client_code=self.client_code,
-            business_context=self.business_context
-        )
+    @property
+    def at(self) -> Union[str, None]:
+        return self.qba.access_token
 
-        if self.cid is None:
-            self.qba.establish_access()
-            self.address_new_oauth2_token()
-                
-        if self.qba.session is None:
-            if self.vb > 1:
-                self.print("QBS has no working access token!")
-                if self.vb > 8:
-                    self.print("Inspect self.qba, the QBAuth object:")
-                    import ipdb
-                    ipdb.set_trace()
+    @property
+    def rt(self) -> Union[str, None]:
+        return self.qba.refresh_token
 
-        if self.qba.new_token and self.oauth_version == 1:
-            if self.cid is None:
-                self.cid = self.qba.realm_id
+    @property
+    def cid(self) -> Union[str, None]:
+        return self.qba.realm_id
 
-            if self.vb > 1:
-                self.print(f"New access token et al for company id {self.cid}.")
-                self.print("Don't forget to store it!")
+    @property
+    def cli(self) -> Union[str, None]:
+        return self.qba.client_id
 
-    @logger.timeit(**void)
-    def _reload_credentials(self):
-        """
-        Addresses a situation where another process refreshes while this
-         process is still using these old creds. In such a situation, the 
-         refresh operation will fail, and we need to get new creds from the
-         QBS instantiator.
-        """
-        if self.vb > 2:
-            self.print(f"Reloading {self} credentials!")
+    @property
+    def cls(self) -> Union[str, None]:
+        return self.qba.client_secret
 
-        if self.rlc is None:
-            raise Exception("Got no function at instantiation...")
-            
-        # Reset this objects cred attrs...
-        self.rlc()
+    @property
+    def exa(self) -> Union[str, None]:
+        return self.qba.expires_at
 
-        # Propagate the new creds to the QBA object...
-        for attr in ["refresh_token", "access_token"]:
-            setattr(self.qba, attr, getattr(self, attr))
+    @property
+    def rtaa(self) -> Union[str, None]:
+        return self.qba.rt_acquired_at
+
+    @property
+    def cbu(self) -> Union[str, None]:
+        return self.qba.callback_url
+
+    @property
+    def business_context(self) -> str:
+        return self.qba.business_context
+
+    @property
+    def logged_in(self) -> bool:
+        return self.qba.logged_in
 
     @retry()
     @logger.timeit(**returns)
@@ -223,19 +173,13 @@ class QBS(LoggedClass):
         params often get used for the Reports API, not for CRUD ops.
         """
         headers  = {"accept": "application/json"}
-
-        """
-        if not "minorversion" in url and not self.mav is None:
-            url += "?minorversion={}".format(str(int(self.mav)))
-        """
         original_params = params.copy()
         original_data   = None
 
         if isinstance(data, str):
             original_data = data + ""
             
-        if "minorversion" not in params.get("params", {}) and \
-           self.mav is not None:
+        if "minorversion" not in params.get("params", {}) and self.mav is not None:
             if "params" not in params:
                 params["params"] = {}
 
@@ -244,19 +188,18 @@ class QBS(LoggedClass):
         if "download" in url:
             headers = {}
         elif "/pdf" == url[-4:]:
-            headers = {"content-type" : "application/pdf"}
+            headers = {"content-type": "application/pdf"}
 
         if request_type.lower() in ["post"]:
             if url[-4:] == "send":
-                headers.update({"Content-Type" : "application/octet-stream"})
+                headers.update({"Content-Type": "application/octet-stream"})
 
             elif isinstance(data, dict):
-                orig_data = data.copy() # For Troubleshooting
+                orig_data = data.copy()  # For Troubleshooting
                 if "headers" in data:
                     # It should be a dict, then...
                     headers = data["headers"].copy()       # must be a dict
                     data    = data["request_body"] + ""    # should be text
-                    # data    = data["request_body"].encode("utf-8")
                 else:
                     headers["Content-Type"] = "application/json"
                     data = json.dumps(data)
@@ -288,35 +231,38 @@ class QBS(LoggedClass):
                 ipdb.set_trace()
 
         self.last_call = {
-            "request_type" : request_type.upper(),
-            "url"          : url,
-            "realm"        : self.cid,
-            "header"       : headers,
-            "data"         : data,
-            "params"       : params}
+            "request_type": request_type.upper(),
+            "url"         : url,
+            "realm"       : self.cid,
+            "header"      : headers,
+            "data"        : data,
+            "params"      : params}
 
-        established_access = False
-        tries_remaining    = 2
+        # established_access = False
+        # tries_remaining    = 2
+        #
+        # while not established_access:
+        #     # Handle a situation where one instance loads up credentials that
+        #     #  an earlier instance is ABOUT to blow away (because of a token
+        #     #  refresh).
+        #     try:
+        #         self.qba.establish_access()
+        #     except:
+        #         if not hasattr(self.qba, "refresh_failure"):
+        #             raise
+        #
+        #         if self.qba.refresh_failure:
+        #             tries_remaining -= 1
+        #             self.qba.reload_credentials()
+        #
+        #         if tries_remaining > 0:
+        #             continue
+        #
+        #         raise
+        #     else:
+        #         break
 
-        while not established_access:
-            # Handle a situation where one instance loads up credentials that
-            #  an earlier instance is ABOUT to blow away (because of a token
-            #  refresh).
-            try:
-                self.qba.establish_access()
-                break
-            except:
-                if not hasattr(self.qba, "refresh_failure"):
-                    raise
-                
-                if self.qba.refresh_failure:
-                    tries_remaining -= 1
-                    self._reload_credentials()
-
-                if tries_remaining > 0:
-                    continue
-
-                raise   
+        # Up to this point we are just building the request parameters and troubleshooting utilities
 
         response = self.qba.request(
             request_type.upper(),
@@ -329,24 +275,13 @@ class QBS(LoggedClass):
             **params
         )
 
-        # try:
-        #     api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
-        #                     f"{response.request.method.ljust(4)} {response.url} - {response.json()}")
-        # except Exception as ex:
-        #     try:
-        #         api_logger.info(f"{response.__hash__()} - {response.status_code} {response.reason} - "
-        #                         f"{response.request.method.ljust(4)} {response.url} - None")
-        #     except:
-        #         pass
-
         self.last_response = response
 
         if not hasattr(self, "resps"):
             self.resps = collections.OrderedDict()
 
         # For troubleshooting
-        self.resps[response.headers["intuit_tid"]] = (
-            response.request.url, response.request.body, response)
+        self.resps[response.headers["intuit_tid"]] = (response.request.url, response.request.body, response)
         
         if self.vb > 7:
             self.print("The final URL (with params):")
@@ -357,13 +292,16 @@ class QBS(LoggedClass):
                 import ipdb
                 ipdb.set_trace()
 
-        if self.oauth_version == 2 and self.address_new_oauth2_token():
-            return self._basic_call(
-                request_type=request_type,
-                url=url,
-                data=original_data,
-                **original_params
-            )
+        # This is here to retry the request when it ended on error because of an expired token.
+        # self.qba.save_new_tokens() will return True if the session has new tokens AND they were saved.
+        # if self.oauth_version == 2 and self.qba.save_new_tokens():
+        #     import ipdb;ipdb.set_trace()
+        #     return self._basic_call(
+        #         request_type=request_type,
+        #         url=url,
+        #         data=original_data,
+        #         **original_params
+        #     )
                     
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
@@ -389,49 +327,6 @@ class QBS(LoggedClass):
             error_message = response.text
 
         raise ConnectionError(error_message)
-
-    @logger.timeit(**returns)
-    def address_new_oauth2_token(self):
-        if not self.qba.new_token:
-            return False
-        
-        self.exa = str(
-            datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
-        self.cid = self.qba.realm_id
-        self.at  = self.qba.access_token
-        self.rt  = self.qba.refresh_token
-
-        updater  = {
-            "access_token"  : self.at,
-            "refresh_token" : self.rt,
-            "expires_at"    : self.exa,
-            "company_id"    : self.cid
-        }
-
-        self.info('New credentials!')
-        self.info(updater)
-
-        if self.qba.new_refresh_token:
-            # In case we actually need to re-authorize after a year,
-            #  let's know when we got the refresh token
-            updater["rt_acquired_at"] = str(datetime.datetime.utcnow())
-
-        if self.ntcbf is not None:
-            # Make the callback (if available)
-            self.ntcbf(updater)
-
-            self.qba.new_token = False
-
-        else:
-            if self.vb > 1:
-                self.print("You're refresh token and access token are new.",
-                           "Store the new credentials!")
-
-        return True
-
-    ALIASES = {
-        "CreditCardPayment": "CreditCardPaymentTxn",  # Why, Intuit?!
-    }
 
     @logger.timeit(**returns)
     def query(self,
@@ -678,12 +573,6 @@ class QBS(LoggedClass):
 
         return raw
 
-    BAD_CHARS = {
-        '\u2010' : "-",
-        '\u2013' : "-",
-        '\uff0c' : ", ",
-    }
-
     @logger.timeit(**returns)
     def upload(self, path, attach_to_object_type=None,
                attach_to_object_id=None, new_name=None,
@@ -706,7 +595,6 @@ class QBS(LoggedClass):
         """
         url       = f"{self.API_BASE_URL}/{self.cid}/upload"
         loc, name = os.path.split(path)
-        #base, ext = name.rsplit(".", 1)
         base, ext = os.path.splitext(name)
         mime_type = self.ATTACHABLE_MIME_TYPES.get(ext.lower())
 
@@ -733,7 +621,7 @@ class QBS(LoggedClass):
         if attach_to_object_type and attach_to_object_id:
             jd.update({
                 "AttachableRef" : [
-                    {"EntityRef" : {
+                    {"EntityRef": {
                         "type"  : attach_to_object_type,
                         "value" : attach_to_object_id,},
                      "IncludeOnSend" : include_on_send},],})
@@ -764,8 +652,8 @@ class QBS(LoggedClass):
             request_body = request_body.replace(ky, vl)
         
         data = {
-            "headers"      : headers.copy(),
-            "request_body" : request_body
+            "headers"     : headers.copy(),
+            "request_body": request_body
         }
         self.touchless_test()
         return self._basic_call(request_type="POST", url=url, data=data)
