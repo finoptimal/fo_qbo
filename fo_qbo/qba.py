@@ -405,7 +405,7 @@ class QBAuth2(LoggedClass):
             )
 
         elif resp.status_code == 429:
-            raise RateLimitError
+            raise RateLimitError(f'{status_code} {reason}')
             
         if self.vb > 10:
             self.print("response code:", resp.status_code)
