@@ -23,8 +23,11 @@ import google.cloud.logging as logging_gcp
 
 import requests
 from django.conf import settings
+
 from finoptimal import environment
-from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
+from finoptimal.logging import LoggedClass, get_logger, void, returns
+from finoptimal.utilities import retry
+from fo_qbo.errors import RateLimitError
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
@@ -32,7 +35,6 @@ logger = get_logger(__name__)
 
 client = logging_gcp.Client()
 api_logger = client.logger('api-qbo')
-# api_logger = get_file_logger('api/qbo')
 
 IMMEDIATELY_RAISABLE_ERRORS = {}
 
@@ -166,7 +168,11 @@ class QBS(LoggedClass):
     def logged_in(self) -> bool:
         return self.qba.logged_in
 
-    @retry()
+    # I am removing the all-catching retry in favor of something more specific. This gives us better control over the
+    # behavior here.
+
+    @retry(max_tries=2, delay_secs=0.2, drag_factor=1, exceptions=(ConnectionError,))  # Replacement for legacy retry()
+    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
