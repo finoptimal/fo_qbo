@@ -10,17 +10,16 @@ import requests
 import sys
 from typing import Union, Optional
 
-import google.cloud.logging as logging_gcp
 from intuitlib.client import AuthClient
 from intuitlib.exceptions import AuthClientError
 from intuitlib.enums import Scopes
-from google.cloud.logging import DESCENDING
 
 from finoptimal.logging import get_logger, LoggedClass, void, returns
 from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
-from fo_qbo.errors import RateLimitError
 
+import google.cloud.logging as logging_gcp
+from google.cloud.logging import DESCENDING
 
 logger = get_logger(__name__)
 
@@ -403,9 +402,6 @@ class QBAuth2(LoggedClass):
                 data=data,
                 **params
             )
-
-        elif resp.status_code == 429:
-            raise RateLimitError(f'{status_code} {reason}')
             
         if self.vb > 10:
             self.print("response code:", resp.status_code)
