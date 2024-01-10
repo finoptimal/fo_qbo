@@ -10,24 +10,19 @@ import requests
 import sys
 from typing import Union, Optional
 
-import google.cloud.logging as logging_gcp
 from intuitlib.client import AuthClient
 from intuitlib.exceptions import AuthClientError
 from intuitlib.enums import Scopes
 from google.cloud.logging import DESCENDING
 
-from finoptimal.logging import get_logger, LoggedClass, void, returns
+from finoptimal.logging import get_logger, LoggedClass, void, returns, GoogleCloudLogger
 from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
 from fo_qbo.errors import RateLimitError
 
 
-
 logger = get_logger(__name__)
 
-client = logging_gcp.Client()
-api_logger = client.logger('api-qbo')
-token_logger = client.logger('tokens-qbo')
 
 CALLBACK_URL      = "http://a.b.com"
 
@@ -71,6 +66,10 @@ class QBAuth2(LoggedClass):
         self.vb = verbosity
         self.environment = "sandbox" if env and env == "sandbox" else "production"
 
+        # Set-up GCP loggers
+        self.api_logger = GoogleCloudLogger('api-qbo')
+        self.token_logger = GoogleCloudLogger('tokens-qbo')
+
         # We never start out with new tokens, they have to be retrieved from the API
         self.new_token = False
         self.new_refresh_token = False
@@ -104,6 +103,20 @@ class QBAuth2(LoggedClass):
             self.reload_credentials()
 
         self._login()
+
+        # Set logger contexts
+        self.api_logger.context = self.logger_context
+        self.token_logger.context = self.logger_context
+
+    @property
+    def logger_context(self) -> dict:
+        """dict: Labels that are attached to the logged records in GCP."""
+        return {
+            'client_code': self.client_code,
+            'context': self.business_context,
+            'caller': self.caller,
+            'realm_id': self.realm_id
+        }
 
     @property
     def initial_access_token(self) -> Union[str, None]:
@@ -343,22 +356,7 @@ class QBAuth2(LoggedClass):
 
         msg = f'Making {request_type.upper()} request to {url}'
 
-        try:
-            api_logger.log(
-                msg,
-                labels={
-                    'client_code': self.client_code,
-                    'context': self.business_context,
-                    'caller': self.caller,
-                    'method': request_type.upper(),
-                    'url': url,
-                    'realm_id': self.realm_id,
-                    'data': json.dumps(data)[:5000]
-                }
-            )
-        except Exception:
-            self.exception()
-            self.info(msg)
+        self.api_logger.info(msg, method=request_type.upper(), url=url, data=json.dumps(data)[:5000])
 
         resp = requests.request(method=request_type.upper(), url=url, headers=_headers, data=data, **params)
         status_code = str(resp.status_code)
@@ -369,27 +367,11 @@ class QBAuth2(LoggedClass):
         try:
             msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
                    f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
-        except Exception as ex:
+        except Exception:
             msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
                    f"{status_code} {reason} - {method} {response_url} - None")
 
-        try:
-            api_logger.log(
-                msg[:5000],
-                labels={
-                    'client_code': self.client_code,
-                    'context': self.business_context,
-                    'caller': self.caller,
-                    'method': method,
-                    'status_code': status_code,
-                    'reason': reason,
-                    'url': response_url,
-                    'realm_id': self.realm_id
-                }
-            )
-        except Exception:
-            self.exception()
-            self.info(msg)
+        self.api_logger.info(msg[:5000], method=method, status_code=status_code, reason=reason, url=response_url)
 
         if resp.status_code == 401:
             self.refresh()
@@ -445,7 +427,7 @@ class QBAuth2(LoggedClass):
         self._has_access = True
 
     @logger.timeit(**void)
-    def oob(self, callback_url=CALLBACK_URL):
+    def oob(self):
         """
         Out of Band solution adapted from QBAuth.
         """
@@ -479,38 +461,17 @@ class QBAuth2(LoggedClass):
 
     def log_pending_token_event(self) -> None:
         self.info(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
-
-        try:
-            token_logger.log(
-                f"Refreshing {self.realm_id}'s refresh and access tokens!",
-                labels={
-                    'context': self.business_context,
-                    'client_code': self.client_code,
-                    'caller': self.caller,
-                    'realm_id': self.realm_id
-                }
-            )
-        except Exception:
-            self.exception()
+        self.token_logger.info(f"Refreshing {self.realm_id}'s refresh and access tokens!")
 
     def log_token_event_outcome(self) -> None:
         self.info(f'New access token for realm id {self.realm_id}: {self.access_token}')
         self.info(f'New refresh token for realm id {self.realm_id}: {self.refresh_token}')
 
-        try:
-            token_logger.log(
-                f'New tokens for {self.realm_id}',
-                labels={
-                    'refresh_token': self.refresh_token,
-                    'access_token': self.access_token,
-                    'context': self.business_context,
-                    'client_code': self.client_code,
-                    'caller': self.caller,
-                    'realm_id': self.realm_id
-                },
-            )
-        except Exception:
-            self.exception()
+        self.token_logger.info(
+            f'New tokens for {self.realm_id}',
+            refresh_token=self.refresh_token,
+            access_token=self.access_token,
+        )
 
     def log_token_fix(self, from_log: bool) -> None:
         if from_log:
@@ -520,20 +481,7 @@ class QBAuth2(LoggedClass):
 
         self.info(msg)
 
-        try:
-            token_logger.log(
-                msg,
-                labels={
-                    'refresh_token': self.refresh_token,
-                    'access_token': self.access_token,
-                    'context': self.business_context,
-                    'client_code': self.client_code,
-                    'caller': self.caller,
-                    'realm_id': self.realm_id
-                },
-            )
-        except Exception:
-            self.exception()
+        self.token_logger.info(msg, refresh_token=self.refresh_token, access_token=self.access_token)
 
     @retry(max_tries=3, delay_secs=5, exceptions=(AuthClientError, ))
     @logger.timeit(**void)
@@ -571,7 +519,7 @@ class QBAuth2(LoggedClass):
         self.print(f"Disconnecting {self.realm_id}'s access token!")
         try:
             self.session.revoke(token=self.refresh_token)
-        except Exception as e:
+        except AuthClientError as e:
             if e.status_code == 400:
                 pass
             else:
@@ -589,7 +537,7 @@ class QBAuth2(LoggedClass):
             f'timestamp>"{lookback_period}"'
         ])
 
-        log_entries = token_logger.list_entries(filter_=filters, order_by=DESCENDING, max_results=3)
+        log_entries = self.token_logger.list_entries(filter_=filters, order_by=DESCENDING, max_results=3)
 
         return [entry for entry in log_entries]
 
