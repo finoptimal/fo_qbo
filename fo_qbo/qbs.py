@@ -24,6 +24,7 @@ import google.cloud.logging as logging_gcp
 import requests
 from django.conf import settings
 from finoptimal import environment
+from finoptimal.exceptions import QBOError
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
@@ -302,8 +303,11 @@ class QBS(LoggedClass):
         #         data=original_data,
         #         **original_params
         #     )
-                    
+
         if response.status_code in [200]:
+            # raise a QBOError if QBO returned a Fault
+            self.raise_possible_qbo_exception(response)
+
             if headers.get("accept") == "application/json":
                 rj = response.json()
 
@@ -327,6 +331,23 @@ class QBS(LoggedClass):
             error_message = response.text
 
         raise ConnectionError(error_message)
+
+    @logger.timeit(**void)
+    def raise_possible_qbo_exception(self, response):
+        """
+        Raise a QBOError if QBO returned a Fault.
+        """
+        is_error = False
+        batch_item_response = response.json().get('BatchItemResponse', {})
+        request_body = response.request.body
+
+        if batch_item_response:
+            for item in batch_item_response:
+                if 'Fault' in item.keys():
+                    is_error = True
+
+        if is_error:
+            raise QBOError(self, batch_item_response, request_body)
 
     @logger.timeit(**returns)
     def query(self,
