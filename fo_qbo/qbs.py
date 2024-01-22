@@ -319,17 +319,39 @@ class QBS(LoggedClass):
                 
                 self.last_call_time = rj.get("time")
                 return rj
+
             elif headers.get("content-type") == "application/pdf":
                 return response
+
             else:
                 return response.text
 
         try:
             error_message = response.json()
+
         except:
             error_message = response.text
+            if "504 Gateway Time-out" in error_message:
+                self.per_page_max = int(self.per_page_max / 4)
 
         raise ConnectionError(error_message)
+
+    DEFAULT_PER_PAGE = 1000
+
+    @property
+    @logger.timeit(**returns)
+    def per_page_max(self):
+        if not hasattr(self, "_per_page_max"):
+            self._per_page_max = self.DEFAULT_PER_PAGE
+
+        return self._per_page_max
+
+
+    @per_page_max.setter
+    @logger.timeit(**returns)
+    def per_page_max(self, ppm):
+        self._per_page_max = ppm
+
 
     @logger.timeit(**returns)
     def query(self,
@@ -337,7 +359,7 @@ class QBS(LoggedClass):
               where_tail: Optional[str] = None,
               count_only: bool = False,
               start_position: Optional[int] = None,
-              per_page: int = 1000,
+              per_page: int = DEFAULT_PER_PAGE,
               select_fields: Optional[str] = None) -> Union[list, int]:
         """Query the QuickBooks Online API.
 
@@ -369,6 +391,8 @@ class QBS(LoggedClass):
 
         where_tail = " " + where_tail if where_tail else ""
         query = f"SELECT {select_what} FROM {object_type}{where_tail}"
+
+        per_page = min(per_page, self.per_page_max)
 
         if not count_only:
             query += f" MAXRESULTS {per_page}"
