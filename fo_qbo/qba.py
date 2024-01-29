@@ -522,7 +522,7 @@ class QBAuth2(LoggedClass):
 
             self.token_logger.info(
                 f'AuthClientError handling attempt {self.auth_client_error_retry_count}',
-                attempt_number=self.auth_client_error_retry_count
+                attempt_number=str(self.auth_client_error_retry_count)
             )
 
             if self.fixed_by_reloading_credentials():
