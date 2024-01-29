@@ -509,6 +509,9 @@ class QBAuth2(LoggedClass):
             self.token_logger.info('Potential false positive AuthClientError detected')
             return
 
+        # TODO: I think some more refactoring needs to be done to ensure that competing processes attempt to use the
+        # same credentials rather than creating new ones.
+
         self.log_pending_token_event()
 
         try:
