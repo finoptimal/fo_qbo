@@ -95,6 +95,7 @@ class QBAuth2(LoggedClass):
             access_token=self.initial_access_token,
             realm_id=self.realm_id
         )
+        self.reset_auth_client_error_retry_count()
 
         if self.realm_id is None:
             # If we don't have a realm_id, we don't have credentials for this client.
@@ -107,6 +108,16 @@ class QBAuth2(LoggedClass):
         # Set logger contexts
         self.api_logger.context = self.logger_context
         self.token_logger.context = self.logger_context
+
+    @property
+    def auth_client_error_retry_count(self) -> int:
+        return self._auth_client_error_retry_count
+
+    def increment_auth_client_error_retry_count(self) -> None:
+        self._auth_client_error_retry_count += 1
+
+    def reset_auth_client_error_retry_count(self) -> None:
+        self._auth_client_error_retry_count = 0
 
     @property
     def logger_context(self) -> dict:
@@ -205,7 +216,7 @@ class QBAuth2(LoggedClass):
         return self._realm_id
 
     @property
-    def expires_at(self) -> str:
+    def expires_at(self) -> Union[str, None]:
         """str: The timestamp of when the access_token expires."""
         return self._expires_at
 
@@ -486,6 +497,21 @@ class QBAuth2(LoggedClass):
     @retry(max_tries=3, delay_secs=5, exceptions=(AuthClientError, ))
     @logger.timeit(**void)
     def refresh(self) -> None:
+        # I am adding this as defence against the irrational AuthClientErrors that Intuit throws from time to time,
+        # which leads to excessive token exchanges. If we hit this condition there is a good chance Intuit threw a
+        # false positive.
+        if (
+            self.auth_client_error_retry_count == 0 and
+            self.expires_at and
+            self.expires_at >= str(datetime.datetime.utcnow())
+        ):
+            self.increment_auth_client_error_retry_count()
+            self.token_logger.info('Potential false positive AuthClientError detected')
+            return
+
+        # TODO: I think some more refactoring needs to be done to ensure that competing processes attempt to use the
+        # same credentials rather than creating new ones.
+
         self.log_pending_token_event()
 
         try:
@@ -493,6 +519,11 @@ class QBAuth2(LoggedClass):
 
         except AuthClientError:
             self.exception()
+
+            self.token_logger.info(
+                f'AuthClientError handling attempt {self.auth_client_error_retry_count}',
+                attempt_number=str(self.auth_client_error_retry_count)
+            )
 
             if self.fixed_by_reloading_credentials():
                 # Both instance and session attributes were updated, no need to update GCP
@@ -503,11 +534,14 @@ class QBAuth2(LoggedClass):
                 self.log_token_fix(from_log=True)
 
             else:
+                self.increment_auth_client_error_retry_count()
                 raise
 
+            self.reset_auth_client_error_retry_count()
             return
 
         else:
+            self.reset_auth_client_error_retry_count()
             self.new_token = True
             self._access_token  = self.session.access_token
             self._refresh_token = self.session.refresh_token
