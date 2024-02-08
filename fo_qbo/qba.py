@@ -1,7 +1,7 @@
 """
 QBO Rest API Client
 
-Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
+Copyright 2016-2024 FinOptimal, Inc. All rights reserved.
 """
 import datetime
 import os
@@ -230,6 +230,12 @@ class QBAuth2(LoggedClass):
         """int: The minor API version the client is using."""
         return self._minor_api_version
 
+    
+    @minor_api_version.setter
+    def minor_api_version(self, mav):
+        self._minor_api_version = mav
+
+
     @property
     def caller(self) -> Union[str, None]:
         """The name of the process responsible for this instance."""
@@ -270,8 +276,8 @@ class QBAuth2(LoggedClass):
         self._realm_id = self.credentials.get('company_id')
         self._expires_at = self.credentials.get('expires_at')
         self._rt_acquired_at = self.credentials.get('rt_acquired_at')
-        self._minor_api_version = self.credentials.get('minor_api_version')
-        self._minor_api_version = self._minor_api_version if self._minor_api_version else self.MINOR_API_VERSION
+        self.minor_api_version = self.credentials.get('minor_api_version')
+        self.minor_api_version = self.minor_api_version if self.minor_api_version else self.MINOR_API_VERSION
 
     def _update_credentials(self, credentials: dict) -> None:
         """Update the credentials (client only) in Google Cloud.

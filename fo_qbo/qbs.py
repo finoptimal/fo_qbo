@@ -8,7 +8,7 @@ https://developer.intuit.com/v2/apiexplorer
 
 Please contact developer@finoptimal.com with questions or comments.
 
-Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
+Copyright 2016-2024 FinOptimal, Inc. All rights reserved.
 """
 import collections
 import datetime
