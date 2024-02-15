@@ -562,7 +562,6 @@ class QBAuth2(LoggedClass):
         self._logged_in = False
         self._delete_credentials()
 
-    @retry(max_tries=3, delay_secs=0.5, drag_factor=2)
     def get_token_log_entries(self) -> list:
         lookback_period = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat().split('.')[0] + 'Z'
 
@@ -582,11 +581,7 @@ class QBAuth2(LoggedClass):
             'refresh_token': None,
             'expires_at': None
         }
-
-        try:
-            entries = self.get_token_log_entries()
-        except Exception:
-            entries = []
+        entries = self.get_token_log_entries()
 
         if len(entries) > 0:
             latest_entry = entries[0]
@@ -625,9 +620,7 @@ class QBAuth2(LoggedClass):
         refresh_token = token_dict.get('refresh_token')
         expires_at = token_dict.get('expires_at')
 
-        if (access_token and
-                access_token != self.access_token and
-                (not self.expires_at or expires_at >= self.expires_at)):
+        if access_token != self.access_token and (not self.expires_at or expires_at >= self.expires_at):
             fixed = True
             self._access_token = access_token
             self._expires_at = expires_at
