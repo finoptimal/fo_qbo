@@ -143,7 +143,7 @@ class QBOErrorHandler(LoggedClass):
             self.info('===============================================================================================')
             self.info('')
             self.info('')
-            restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True, object_types=['JournalEntry'])
+            restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
             raise CachingError(error_detail, name=error_name, code=error_code)
 
 
