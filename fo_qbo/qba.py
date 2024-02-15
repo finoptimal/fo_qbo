@@ -625,7 +625,9 @@ class QBAuth2(LoggedClass):
         refresh_token = token_dict.get('refresh_token')
         expires_at = token_dict.get('expires_at')
 
-        if access_token != self.access_token and (not self.expires_at or expires_at >= self.expires_at):
+        if (access_token and
+                access_token != self.access_token and
+                (not self.expires_at or expires_at >= self.expires_at)):
             fixed = True
             self._access_token = access_token
             self._expires_at = expires_at
