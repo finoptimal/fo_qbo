@@ -142,12 +142,13 @@ class QBOErrorHandler(LoggedClass):
             error_code = error.get('code')
             error_detail = error.get('Detail')
             rollback_days = 2  # TODO: Maybe parameterize
+            fix_message = f'Rolling back {self._qbs.client_code} cache {rollback_days} day(s) to resolve {error_name}'
 
             self.info(f'error_name:   {error_name}')
             self.info(f'error_code:   {error_code}')
             self.info(f'error_detail: {error_detail}')
-
-            self.info(f'Rolling back {self._qbs.client_code} cache {rollback_days} day(s) to resolve {error_name}')
+            self.info(fix_message)
+            self._qbs.qba.api_logger.info(fix_message)
             self.info('===============================================================================================')
             self.info('')
             self.info('')
