@@ -22,12 +22,23 @@ class CachingError(TechnicalError):
 
 
 class QBOErrorHandler(LoggedClass):
+    """
+    Aims to resolve QBO errors inplace.
 
-    SUPPORTED_STATUS_CODES = [200, 400]
+    Parameters
+    ----------
+    qbs : QBS
+    response : requests.Response
+        The API response. This class will determine if there are errors it can resolve, and if a resolution takes place,
+        the appropriate error is raised so that callers can retry.
+    """
+    # 400 status_codes with API code 5010 seem related to entities, not entries, and specific to aplus, expensify, and
+    # custom code. Not worrying about those for now.
+    SUPPORTED_STATUS_CODES = [200]
 
-    CACHING_ERROR_CODES = ['5010', '6140']
+    CACHING_ERROR_CODES = ['5010']  # Stale Object Error
 
-    def __init__(self, qbs, response) -> None:
+    def __init__(self, qbs, response: requests.Response) -> None:
         # There is a property hierarchy set within this class. Setting any one low-level property will update any
         # dependent, higher-level property. The hierarchy, from low to high, is this:
         #   - response
@@ -88,9 +99,6 @@ class QBOErrorHandler(LoggedClass):
 
     @errors.setter
     def errors(self, faults: list) -> None:
-        # print('\n\n\nFAULTS\n\n\n')
-        # print(faults)
-        # print('\n\n\n\n\n')
         self._errors = [fault.get('Fault') for fault in faults]
         self.error_messages = self._errors
 
