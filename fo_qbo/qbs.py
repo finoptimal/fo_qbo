@@ -26,7 +26,7 @@ from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
 from finoptimal.utilities import retry
-from fo_qbo.errors import RateLimitError
+from fo_qbo.errors import RateLimitError, CachingError, QBOErrorHandler
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 
@@ -305,7 +305,13 @@ class QBS(LoggedClass):
         #         data=original_data,
         #         **original_params
         #     )
-                    
+
+        if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
+            # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
+            # that's suitable.
+            handler = QBOErrorHandler(self, response)
+            handler.resolve()
+
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
                 rj = response.json()
