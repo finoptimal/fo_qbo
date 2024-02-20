@@ -230,6 +230,10 @@ class QBAuth2(LoggedClass):
         """int: The minor API version the client is using."""
         return self._minor_api_version
 
+    @minor_api_version.setter
+    def minor_api_version(self, version_number):
+        self._minor_api_version = version_number
+
     @property
     def caller(self) -> Union[str, None]:
         """The name of the process responsible for this instance."""
@@ -270,8 +274,8 @@ class QBAuth2(LoggedClass):
         self._realm_id = self.credentials.get('company_id')
         self._expires_at = self.credentials.get('expires_at')
         self._rt_acquired_at = self.credentials.get('rt_acquired_at')
-        self._minor_api_version = self.credentials.get('minor_api_version')
-        self._minor_api_version = self._minor_api_version if self._minor_api_version else self.MINOR_API_VERSION
+        self.minor_api_version = self.credentials.get('minor_api_version')
+        self.minor_api_version = self.minor_api_version if self.minor_api_version else self.MINOR_API_VERSION
 
     def _update_credentials(self, credentials: dict) -> None:
         """Update the credentials (client only) in Google Cloud.

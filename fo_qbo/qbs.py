@@ -128,6 +128,10 @@ class QBS(LoggedClass):
     def mav(self) -> int:
         return self.qba.minor_api_version
 
+    @mav.setter
+    def mav(self, minor_version_number):
+        self.qba.minor_api_version = minor_version_number
+
     @property
     def at(self) -> Union[str, None]:
         return self.qba.access_token
