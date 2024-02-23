@@ -18,7 +18,7 @@ from google.cloud.logging import DESCENDING
 from finoptimal.logging import get_logger, LoggedClass, void, returns, GoogleCloudLogger
 from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
-from fo_qbo.errors import RateLimitError
+from fo_qbo.errors import RateLimitError, UnauthorizedError
 
 
 logger = get_logger(__name__)
@@ -351,6 +351,7 @@ class QBAuth2(LoggedClass):
         del self.credentials
         self._refresh_credential_attributes()
 
+    @retry(max_tries=3, exceptions=(UnauthorizedError,))
     @logger.timeit(**returns, expand=True)
     def request(self, request_type, url, header_auth=True, realm='', verify=True, headers=None, data=None, **params):
         """
@@ -390,17 +391,18 @@ class QBAuth2(LoggedClass):
 
         if resp.status_code == 401:
             self.refresh()
+            raise UnauthorizedError(f'{status_code} {reason}')
 
-            self.request(
-                request_type,
-                url,
-                header_auth=header_auth,
-                realm=realm,
-                verify=verify,
-                headers=headers,
-                data=data,
-                **params
-            )
+            # self.request(
+            #     request_type,
+            #     url,
+            #     header_auth=header_auth,
+            #     realm=realm,
+            #     verify=verify,
+            #     headers=headers,
+            #     data=data,
+            #     **params
+            # )
 
         elif resp.status_code == 429:
             raise RateLimitError(f'{status_code} {reason}')
