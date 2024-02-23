@@ -13,6 +13,10 @@ class TechnicalError(Exception):
         super().__init__(*args)
 
 
+class UnauthorizedError(TechnicalError):
+    pass
+
+
 class RateLimitError(TechnicalError):
     pass
 
