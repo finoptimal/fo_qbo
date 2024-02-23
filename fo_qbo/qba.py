@@ -351,7 +351,7 @@ class QBAuth2(LoggedClass):
         del self.credentials
         self._refresh_credential_attributes()
 
-    @retry(max_tries=3, exceptions=(UnauthorizedError,))
+    @retry(max_tries=4, exceptions=(UnauthorizedError,))
     @logger.timeit(**returns, expand=True)
     def request(self, request_type, url, header_auth=True, realm='', verify=True, headers=None, data=None, **params):
         """
