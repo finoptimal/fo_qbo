@@ -391,7 +391,7 @@ class QBAuth2(LoggedClass):
 
         if resp.status_code == 401:
             self.refresh()
-            self.api_logger.info(f'Retrying {method} request due to transient UnauthorizedErrors')
+            self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             raise UnauthorizedError(f'{status_code} {reason}')
 
             # self.request(
