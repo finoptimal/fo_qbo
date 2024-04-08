@@ -222,9 +222,12 @@ class QBS(LoggedClass):
         if not hasattr(self, "resps"):
             self.resps = collections.OrderedDict()
 
-        # For troubleshooting
-        self.resps[response.headers["intuit_tid"]] = (response.request.url, response.request.body, response)
-        
+        intuit_tid = response.headers.get("intuit_tid")
+
+        if intuit_tid:
+            # For troubleshooting
+            self.resps[intuit_tid] = (response.request.url, response.request.body, response)
+
         if self.vb > 7:
             self.print("The final URL (with params):")
             self.print(response.url)
