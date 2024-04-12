@@ -56,10 +56,18 @@ class QBOErrorHandler(LoggedClass):
         self._qbs = qbs
         self.reset_state()
 
-        if response is not None:
-            self.response = response
-        elif response_data is not None:
-            self.faults = response_data
+        try:
+            if response is not None:
+                self.response = response
+            elif response_data is not None:
+                self.faults = response_data
+
+        except Exception as ex:
+            # I'll probably remove this stuff after proving this out
+            self.exception()
+            self.reset_state()
+            error_msg = f'An error occurred during initialization: {str(ex)}'
+            self._qbs.qba.api_logger.info(error_msg[:200])
 
         super().__init__()
 
