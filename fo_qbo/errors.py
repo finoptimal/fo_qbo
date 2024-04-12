@@ -59,7 +59,7 @@ class QBOErrorHandler(LoggedClass):
         if response is not None:
             self.response = response
         elif response_data is not None:
-            self.faults = data
+            self.faults = response_data
 
         super().__init__()
 
@@ -338,6 +338,8 @@ if __name__ == '__main__':
 
     for data in [response, batch, error_dict, stale_object_error]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
+        print(er.faults)
+        print(er.error_df)
         import ipdb
         ipdb.set_trace()
-        er.resolve()
+        # er.resolve()
