@@ -1,6 +1,8 @@
+from typing import Optional, Union
 
 import pandas as pd
 import requests
+
 from finoptimal.logging import LoggedClass
 
 
@@ -29,108 +31,143 @@ class QBOErrorHandler(LoggedClass):
     """
     Aims to resolve QBO errors inplace.
 
+    This class will determine if there are errors it can resolve, and if a resolution takes place, the appropriate
+    error is raised so that callers can retry.
+
     Parameters
     ----------
     qbs : QBS
-    response : requests.Response
-        The API response. This class will determine if there are errors it can resolve, and if a resolution takes place,
-        the appropriate error is raised so that callers can retry.
+    response : requests.Response, optional
+        The API response.
+    response_data : list or dict, optional
+        Data from the API response.
     """
     # 400 status_codes with API code 5010 seem related to entities, not entries, and specific to aplus, expensify, and
     # custom code. Not worrying about those for now.
     SUPPORTED_STATUS_CODES = [200]
 
     CACHING_ERROR_CODES = ['5010']  # Stale Object Error
+    MISSING_PARAMETER_ERROR_CODE = '2020'
 
-    def __init__(self, qbs, response: requests.Response) -> None:
-        # There is a property hierarchy set within this class. Setting any one low-level property will update any
-        # dependent, higher-level property. The hierarchy, from low to high, is this:
-        #   - response
-        #   - json
-        #   - faults
-        #   - errors
-        #   - error_messages
-        #   - error_message_df
+    def __init__(self,
+                 qbs,
+                 response: Optional[requests.Response] = None,
+                 response_data: Optional[Union[list, dict]] = None) -> None:
         self._qbs = qbs
-        self.response = response
+        self.reset_state()
+
+        if response is not None:
+            self.response = response
+        elif response_data is not None:
+            self.faults = data
+
         super().__init__()
 
+    def reset_state(self) -> None:
+        del self.response
+        del self.faults
+        del self.error_df
+
+    @staticmethod
+    def get_list_of_faults(data: Union[dict, list]) -> list:
+        fault_key = 'Fault'
+        batch_key = 'BatchItemResponse'
+        list_of_faults = []
+
+        if isinstance(data, dict) and fault_key in data:
+            # "non-batch" format
+            list_of_faults = [data]
+
+        elif isinstance(data, dict) and batch_key in data:
+            # "batch" format
+            batch_data = data.get(batch_key)
+            list_of_faults = [i for i in batch_data if fault_key in i]
+
+        elif isinstance(data, list) and len(data) > 0 and fault_key in data[0]:
+            # "error_dict" format
+            list_of_faults = data
+
+        return list_of_faults
+
+    @staticmethod
+    def get_error_df(faults: list) -> pd.DataFrame:
+        dfs = []
+        fault_df = pd.DataFrame(faults)
+        cols = [i for i in fault_df.columns if i != 'Fault']
+
+        # I know this isn't the most efficient way to access the data, but this data set should always be small and
+        # the efficiency loss is negligible (for now).
+        for index, row in fault_df.iterrows():
+            df = pd.io.json.json_normalize(row.Fault, record_path=['Error'])
+
+            for col in cols:
+                if row[col]:
+                    df[col] = row[col]
+
+            dfs.append(df)
+
+        return pd.concat(dfs) if len(dfs) > 0 else pd.DataFrame()
+
     @property
-    def response(self) -> requests.Response:
+    def response(self) -> Union[requests.Response, None]:
         return self._response
 
     @response.setter
-    def response(self, response: requests.Response) -> None:
+    def response(self, response: Union[requests.Response, None]) -> None:
         self._response = response
-        self.json = response
+        response_data = {}
 
-    @property
-    def json(self) -> dict:
-        return self._json
+        if self._response is not None:
 
-    @json.setter
-    def json(self, response: requests.Response) -> None:
-        try:
-            self._json = response.json()
-        except Exception:
-            # TODO: Catch more specific exception
-            self._json = {}
+            try:
+                response_data = self._response.json()
+            except Exception:
+                self.exception()
 
-        self.faults = self._json
+        self.faults = response_data
+
+    @response.deleter
+    def response(self) -> None:
+        self._response = None
 
     @property
     def faults(self) -> list:
         return self._faults
 
     @faults.setter
-    def faults(self, response_json: dict) -> None:
+    def faults(self, data: Union[list, dict]) -> None:
+        try:
+            self._faults = self.get_list_of_faults(data)
+        except Exception:
+            self.exception()
+            del self.faults
+
+        self.error_df = self.faults
+
+    @faults.deleter
+    def faults(self) -> None:
         self._faults = []
-        batch_item_response = response_json.get('BatchItemResponse', [])
-
-        if batch_item_response:
-            for item in batch_item_response:
-                if item.get('Fault'):
-                    self._faults.append(item)
-
-        elif response_json.get('Fault'):
-            self._faults.append(response_json)
-
-        self.errors = self._faults
 
     @property
-    def errors(self) -> list:
-        return self._errors
+    def error_df(self) -> pd.DataFrame:
+        return self._error_df
 
-    @errors.setter
-    def errors(self, faults: list) -> None:
-        self._errors = [fault.get('Fault') for fault in faults]
-        self.error_messages = self._errors
+    @error_df.setter
+    def error_df(self, faults: list) -> None:
+        try:
+            self._error_df = self.get_error_df(faults)
+        except Exception:
+            self.exception()
+            del self.error_df
 
-    @property
-    def error_messages(self) -> list:
-        return self._error_messages
-
-    @error_messages.setter
-    def error_messages(self, errors: list) -> None:
-        self._error_messages = []
-
-        for error in errors:
-            self._error_messages.extend(error.get('Error', []))
-
-        self.error_message_df = self._error_messages
-
-    @property
-    def error_message_df(self) -> pd.DataFrame:
-        return self._error_message_df
-
-    @error_message_df.setter
-    def error_message_df(self, error_messages: list) -> None:
-        self._error_message_df = pd.DataFrame(error_messages)
+    @error_df.deleter
+    def error_df(self) -> None:
+        self._error_df = pd.DataFrame()
 
     def has_caching_errors(self) -> bool:
-        return (len(self.error_message_df) > 0 and
-                'code' in self.error_message_df.columns and
-                self.error_message_df.code.isin(self.CACHING_ERROR_CODES).any())
+        return (len(self.error_df) > 0 and
+                'code' in self.error_df.columns and
+                self.error_df.code.isin(self.CACHING_ERROR_CODES).any())
 
     def resolve(self) -> None:
         if self.has_caching_errors():
@@ -139,29 +176,35 @@ class QBOErrorHandler(LoggedClass):
             self.info('===============================================================================================')
             self.info(f'CACHING ERROR DETECTED')
             self.info('===============================================================================================')
-            from finoptimal.admin.helpers import restore_qbo_cache  # Fucking import errors
 
-            error = self.error_message_df.loc[self.error_message_df.code.isin(self.CACHING_ERROR_CODES)].iloc[0]
-            error_name = error.get('Message')
-            error_code = error.get('code')
-            error_detail = error.get('Detail')
-            rollback_days = 2  # TODO: Maybe parameterize
-            fix_message = f'Rolling back {self._qbs.client_code} cache {rollback_days} day(s) to resolve {error_name}'
+            try:
+                from finoptimal.admin.helpers import restore_qbo_cache  # Fucking import errors
 
-            self.info(f'error_name:   {error_name}')
-            self.info(f'error_code:   {error_code}')
-            self.info(f'error_detail: {error_detail}')
-            self.info(fix_message)
-            self._qbs.qba.api_logger.info(fix_message)
-            self.info('===============================================================================================')
-            self.info('')
-            self.info('')
-            restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
-            raise CachingError(error_detail, name=error_name, code=error_code)
+                error = self.error_df.loc[self.error_df.code.isin(self.CACHING_ERROR_CODES)].iloc[0]
+                error_name = error.get('Message')
+                error_code = error.get('code')
+                error_detail = error.get('Detail')
+                rollback_days = 2
+                fix_msg = f'Rolling back {self._qbs.client_code} cache {rollback_days} day(s) to resolve {error_name}'
+
+                self.info(f'error_name:   {error_name}')
+                self.info(f'error_code:   {error_code}')
+                self.info(f'error_detail: {error_detail}')
+                self.info(fix_msg)
+                self._qbs.qba.api_logger.info(fix_msg)
+
+                self.info('===========================================================================================')
+                self.info('')
+                self.info('')
+            except Exception:
+                self.exception()
+            else:
+                restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
+                raise CachingError(error_detail, name=error_name, code=error_code)
 
 
 if __name__ == '__main__':
-    batch1 = {
+    response = {
         'Fault':
             {'Error': [
                 {
@@ -176,7 +219,7 @@ if __name__ == '__main__':
         'bId': 'JournalEntry||ICSWING_2024-02-29|ICS'
     }
 
-    batch2 = {'BatchItemResponse': [
+    batch = {'BatchItemResponse': [
         {'Fault':
             {'Error': [
                 {
@@ -235,8 +278,66 @@ if __name__ == '__main__':
         }
     ]}
 
+    error_dict = [{
+        'Fault': {
+            'Error': [
+                {
+                    'Message': 'Required param missing, need to supply the required value for the API',
+                    'Detail': 'Required parameter AccountRef is missing in the request',
+                    'code': '2020',
+                    'element': 'AccountRef'
+                }
+            ],
+            'type': 'ValidationFault'
+        },
+        'entry_id': '',
+        'entry_label': 'GoodEL_2024_04_30',
+        'entry_magic': 'Booker-GoogleSpreadsheet',
+        'entry_type': 'JournalEntry',
+        'operation': 'create',
+        'result': {}
+    }]
+
+    stale_object_error = {
+        'BatchItemResponse': [
+            {
+                'Fault': {
+                    'Error': [
+                        {
+                            'Message': 'Stale Object Error',
+                            'Detail': 'Stale Object Error : You and Jesse Rubenfeld were working on this at the same time. Jesse Rubenfeld finished before you did, so your work was not saved.',
+                            'code': '5010',
+                            'element': ''
+                        }
+                    ],
+                    'type': 'ValidationFault'
+                },
+                'bId': 'Invoice|52625|ST_FD_SIHP-2024-02|'
+            }, {
+                'Fault': {
+                    'Error': [
+                        {
+                            'Message': 'Stale Object Error',
+                            'Detail': 'Stale Object Error : You and Jesse Rubenfeld were working on this at the same time. Jesse Rubenfeld finished before you did, so your work was not saved.',
+                            'code': '5010',
+                            'element': ''
+                        }
+                    ],
+                    'type': 'ValidationFault'
+                },
+                'bId': 'Invoice|52702|ST_FD_SIHP-2023-12|'
+            }
+        ],
+        'time': '2024-04-08T04:12:18.814-07:00'
+    }
+
     from finoptimal.ledger.qbo2.qbosesh import QBOSesh
+
     sesh = QBOSesh('foco', verbosity=2)
-    e = QBOErrorHandler(sesh.qbs, None)
-    e.faults = batch2
-    import ipdb;ipdb.set_trace()
+    er = QBOErrorHandler(sesh.qbs, None)
+
+    for data in [response, batch, error_dict, stale_object_error]:
+        er = QBOErrorHandler(sesh.qbs, response_data=data)
+        import ipdb
+        ipdb.set_trace()
+        er.resolve()
