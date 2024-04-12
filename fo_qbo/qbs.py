@@ -240,7 +240,7 @@ class QBS(LoggedClass):
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
             # that's suitable.
-            handler = QBOErrorHandler(self, response)
+            handler = QBOErrorHandler(self, response=response)
             handler.resolve()
 
         if response.status_code in [200]:
