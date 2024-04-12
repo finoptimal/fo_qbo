@@ -15,7 +15,6 @@ import datetime
 import json
 import os
 import textwrap
-import time
 from base64 import b64encode
 from typing import Union, Optional
 
@@ -24,57 +23,17 @@ import google.cloud.logging as logging_gcp
 import requests
 from django.conf import settings
 from finoptimal import environment
-from finoptimal.logging import LoggedClass, get_logger, get_file_logger, void, returns
+from finoptimal.logging import LoggedClass, get_logger, void, returns
 from finoptimal.utilities import retry
-from fo_qbo.errors import RateLimitError, CachingError, QBOErrorHandler
+from fo_qbo.errors import RateLimitError, QBOErrorHandler
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
+from .qbo import QBO
 
 logger = get_logger(__name__)
 
 client = logging_gcp.Client()
 api_logger = client.logger('api-qbo')
-# api_logger = get_file_logger('api/qbo')
-
-IMMEDIATELY_RAISABLE_ERRORS = {}
-
-
-# def retry(max_tries=2, delay_secs=0.2):
-#     """
-#     Produces a decorator which tries effectively the function it decorates
-#      a given number of times. Because the QBO API has been known to respond
-#      erratically (and, e.g., return "Unauthorized" errors erroneously), this
-#      method takes a hammer-it approach to the problem (within reason).
-#     """
-#     def decorator(retriable_function):
-#         def inner(*args, **kwargs):
-#             """
-#             Retries retriable_function max_tries times, waiting delay_secs
-#              between tries (and increasing delay_secs geometrically by the
-#              drag_factor). escape can be set to true during a run to get out
-#              immediately if, e.g. ipdb is running.
-#             """
-#             tries  = kwargs.get("tries", max_tries)
-#             delay  = kwargs.get("delay", delay_secs)
-#
-#             attempts = 0
-#
-#             while True:
-#                 try:
-#                     return retriable_function(*args, **kwargs)
-#                     break
-#                 except Exception as ex:
-#                     tries    -= 1
-#                     attempts += 1
-#
-#                     if tries <= 0:
-#                         raise ex
-#
-#                     # back off as failures accumulate in case it's transient
-#                     time.sleep(delay * attempts)
-#
-#         return inner
-#     return decorator
 
 
 class QBS(LoggedClass):
@@ -245,30 +204,6 @@ class QBS(LoggedClass):
             "data"        : data,
             "params"      : params}
 
-        # established_access = False
-        # tries_remaining    = 2
-        #
-        # while not established_access:
-        #     # Handle a situation where one instance loads up credentials that
-        #     #  an earlier instance is ABOUT to blow away (because of a token
-        #     #  refresh).
-        #     try:
-        #         self.qba.establish_access()
-        #     except:
-        #         if not hasattr(self.qba, "refresh_failure"):
-        #             raise
-        #
-        #         if self.qba.refresh_failure:
-        #             tries_remaining -= 1
-        #             self.qba.reload_credentials()
-        #
-        #         if tries_remaining > 0:
-        #             continue
-        #
-        #         raise
-        #     else:
-        #         break
-
         # Up to this point we are just building the request parameters and troubleshooting utilities
 
         response = self.qba.request(
@@ -287,9 +222,12 @@ class QBS(LoggedClass):
         if not hasattr(self, "resps"):
             self.resps = collections.OrderedDict()
 
-        # For troubleshooting
-        self.resps[response.headers["intuit_tid"]] = (response.request.url, response.request.body, response)
-        
+        intuit_tid = response.headers.get("intuit_tid")
+
+        if intuit_tid:
+            # For troubleshooting
+            self.resps[intuit_tid] = (response.request.url, response.request.body, response)
+
         if self.vb > 7:
             self.print("The final URL (with params):")
             self.print(response.url)
@@ -298,17 +236,6 @@ class QBS(LoggedClass):
                 self.print("inspect response:")
                 import ipdb
                 ipdb.set_trace()
-
-        # This is here to retry the request when it ended on error because of an expired token.
-        # self.qba.save_new_tokens() will return True if the session has new tokens AND they were saved.
-        # if self.oauth_version == 2 and self.qba.save_new_tokens():
-        #     import ipdb;ipdb.set_trace()
-        #     return self._basic_call(
-        #         request_type=request_type,
-        #         url=url,
-        #         data=original_data,
-        #         **original_params
-        #     )
 
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
@@ -768,7 +695,45 @@ class QBS(LoggedClass):
         return self._basic_call(request_type="POST",
                                 url=url,
                                 **{"params": {"params": {"sendTo": recipient}}})
-        
+
+    @classmethod
+    def get_where_in_query_string(cls, select_field: str, values: list, object_type: str) -> str:
+        values_string = ','.join([f"'{i}'" for i in values])
+        query = f'WHERE {select_field} IN ({values_string})'
+
+        if object_type not in QBO.TRANSACTION_OBJECTS + QBO.OTHER_OBJECTS:
+            query = f'{query} AND Active in (true,false)'
+
+        return query
+
+    def get_missing(self, object_type: str, values: list, select_field: str):
+        """
+        Returns the values missing from QuickBooks.
+        """
+        starting_index = 0
+        max_count = 999
+        values_count = len(values)
+        missing_values = []
+
+        # We query in increments so that we don't blow up on supersized value lists (e.g. cdc.py)
+
+        while starting_index < values_count:
+            values_subset = values[starting_index : starting_index + max_count]
+
+            where_tail = self.get_where_in_query_string(
+                select_field=select_field,
+                values=values_subset,
+                object_type=object_type
+            )
+            response = self.query(object_type=object_type, where_tail=where_tail, select_fields=select_field)
+            existing = [i.get(select_field) for i in response]
+            missing = list(set(values_subset).difference(existing))
+            missing_values.extend(missing)
+
+            starting_index += max_count
+
+        return missing_values
+
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
 
