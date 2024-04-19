@@ -208,6 +208,45 @@ class QBO:
         'VendorCredit'      : 'entry_id'
     }
 
+    MERGE_EVENT_COLUMN_MAP = {
+        'Account': {
+            'stale_columns': ['line_account', 'header_account', 'entry_deposit_account'],
+            'name_column': 'account_name',
+            'id_column': 'account_id'
+        },
+        'Department': {
+            'stale_columns': ['line_department'],
+            'name_column': 'department_name',
+            'id_column': 'department_id'
+        },
+        'Class': {
+            'stale_columns': ['line_class'],
+            'name_column': 'class_name',
+            'id_column': 'class_id'
+        },
+        'Item': {
+            'stale_columns': ['line_item'],
+            'name_column': 'item_name',
+            'id_column': 'item_id'
+        },
+        'Vendor': {
+            'stale_columns': ['header_name', 'line_name'],
+            'name_column': 'entity_fqn',
+            'id_column': 'entity_id'
+        },
+        'Employee': {
+            'stale_columns': ['header_name', 'line_name'],
+            'name_column': 'entity_fqn',
+            'id_column': 'entity_id'
+        },
+        'Customer': {
+            'stale_columns': ['header_name', 'line_name'],
+            'name_column': 'entity_fqn',
+            'id_column': 'entity_id'
+        },
+    }
+
+
     @classmethod
     def split_words(cls, cap_word: str) -> list:
         return re.findall(r'[A-Z][a-z]+', cap_word)
