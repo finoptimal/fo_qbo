@@ -212,37 +212,44 @@ class QBO:
         'Account': {
             'stale_columns': ['line_account', 'header_account', 'entry_deposit_account'],
             'name_column': 'account_name',
-            'id_column': 'account_id'
+            'id_column': 'account_id',
+            'merge_column': 'account_merged_into'
         },
         'Department': {
             'stale_columns': ['line_department'],
             'name_column': 'department_name',
-            'id_column': 'department_id'
+            'id_column': 'department_id',
+            'merge_column': 'department_merged_into'
         },
         'Class': {
             'stale_columns': ['line_class'],
             'name_column': 'class_name',
-            'id_column': 'class_id'
+            'id_column': 'class_id',
+            'merge_column': 'class_merged_into'
         },
         'Item': {
             'stale_columns': ['line_item'],
             'name_column': 'item_name',
-            'id_column': 'item_id'
+            'id_column': 'item_id',
+            'merge_column': 'item_merged_into'
         },
         'Vendor': {
             'stale_columns': ['header_name', 'line_name'],
             'name_column': 'entity_fqn',
-            'id_column': 'entity_id'
+            'id_column': 'entity_id',
+            'merge_column': 'entity_merged_into'
         },
         'Employee': {
             'stale_columns': ['header_name', 'line_name'],
             'name_column': 'entity_fqn',
-            'id_column': 'entity_id'
+            'id_column': 'entity_id',
+            'merge_column': 'entity_merged_into'
         },
         'Customer': {
             'stale_columns': ['header_name', 'line_name'],
             'name_column': 'entity_fqn',
-            'id_column': 'entity_id'
+            'id_column': 'entity_id',
+            'merge_column': 'entity_merged_into'
         },
     }
 
