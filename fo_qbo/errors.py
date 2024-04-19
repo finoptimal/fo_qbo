@@ -339,15 +339,36 @@ if __name__ == '__main__':
         'time': '2024-04-08T04:12:18.814-07:00'
     }
 
+    ar_customer = [
+        {'Fault': {
+            'Error': [
+                {
+                    'Detail': 'Business Validation Error: When you use Accounts Receivable, you must choose a customer in the Name field.',
+                    'Message': 'A business validation error has occurred while processing your request',
+                    'code': '6000',
+                    'element': ''
+                }
+            ],
+            'type': 'ValidationFault'
+        },
+            'entry_id': '8497',
+            'entry_label': 'EOM_Mar24_2024_03_29',
+            'entry_magic': 'Booker-GoogleSpreadsheet',
+            'entry_type': 'JournalEntry',
+            'operation': 'update',
+            'result': {}
+        }]
+
     from finoptimal.ledger.qbo2.qbosesh import QBOSesh
 
     sesh = QBOSesh('foco', verbosity=2)
     er = QBOErrorHandler(sesh.qbs, None)
 
-    for data in [response, batch, error_dict, stale_object_error]:
+    for data in [response, batch, error_dict, stale_object_error, ar_customer]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
         print(er.faults)
         print(er.error_df)
         import ipdb
+
         ipdb.set_trace()
         # er.resolve()
