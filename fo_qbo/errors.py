@@ -186,7 +186,7 @@ class QBOErrorHandler(LoggedClass):
             if 'Detail' in self.error_df.columns:
                 return len(
                     self.error_df.loc[
-                        self.error_df.Detail.str.contains('Another user has deleted this transaction')
+                        self.error_df.Detail.fillna('').str.contains('Another user has deleted this transaction')
                     ].index
                 ) > 0
 
