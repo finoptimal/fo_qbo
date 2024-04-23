@@ -46,7 +46,9 @@ class QBOErrorHandler(LoggedClass):
     # custom code. Not worrying about those for now.
     SUPPORTED_STATUS_CODES = [200]
 
-    CACHING_ERROR_CODES = ['5010']  # Stale Object Error
+    # 5010 = Stale Object Error
+    # 610 = Object Not Found (This CAN be related to NON-caching problems, so further inspection is required)
+    CACHING_ERROR_CODES = ['5010', '610']
     MISSING_PARAMETER_ERROR_CODE = '2020'
 
     def __init__(self,
@@ -173,9 +175,22 @@ class QBOErrorHandler(LoggedClass):
         self._error_df = pd.DataFrame()
 
     def has_caching_errors(self) -> bool:
-        return (len(self.error_df) > 0 and
-                'code' in self.error_df.columns and
-                self.error_df.code.isin(self.CACHING_ERROR_CODES).any())
+        if (
+            len(self.error_df) > 0 and
+            'code' in self.error_df.columns and
+            self.error_df.code.isin(self.CACHING_ERROR_CODES).any()
+        ):
+            if '5010' in self.error_df.code.unique().tolist():
+                return True
+
+            if 'Detail' in self.error_df.columns:
+                return len(
+                    self.error_df.loc[
+                        self.error_df.Detail.fillna('').str.contains('Another user has deleted this transaction')
+                    ].index
+                ) > 0
+
+        return False
 
     def resolve(self) -> None:
         if self.has_caching_errors():
@@ -357,17 +372,47 @@ if __name__ == '__main__':
             'entry_type': 'JournalEntry',
             'operation': 'update',
             'result': {}
-        }]
+        }
+    ]
+
+    not_found = {
+        'BatchItemResponse': [
+            {
+                'Fault': {
+                    'Error': [
+                        {
+                            'Message': 'Object Not Found',
+                            'Detail': 'Object Not Found : Another user has deleted this transaction.',
+                            'code': '610',
+                            'element': ''
+                        }
+                    ],
+                    'type': 'ValidationFault'
+                },
+                'bId': 'JournalEntry|4351|AA_2024-02_1852ec|Accruer'
+            },
+            {
+                'JournalEntry': {
+                    'domain': 'QBO',
+                    'status': 'Deleted',
+                    'Id': '4352'
+                },
+                'bId': 'JournalEntry|4352|AA_2024-02_1f316c|Accruer'
+            }
+        ],
+        'time': '2024-04-22T18:38:22.315-07:00'
+    }
 
     from finoptimal.ledger.qbo2.qbosesh import QBOSesh
 
     sesh = QBOSesh('foco', verbosity=2)
     er = QBOErrorHandler(sesh.qbs, None)
 
-    for data in [response, batch, error_dict, stale_object_error, ar_customer]:
+    for data in [stale_object_error, not_found, ar_customer, batch]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
-        print(er.faults)
-        print(er.error_df)
+        # print(er.faults)
+        # print(er.error_df)
+        print(er.has_caching_errors())
         import ipdb
 
         ipdb.set_trace()
