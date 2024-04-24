@@ -27,6 +27,10 @@ class CachingError(TechnicalError):
     pass
 
 
+class BusinessValidationError(TechnicalError):
+    pass
+
+
 class QBOErrorHandler(LoggedClass):
     """
     Aims to resolve QBO errors inplace.
@@ -50,6 +54,7 @@ class QBOErrorHandler(LoggedClass):
     # 610 = Object Not Found (This CAN be related to NON-caching problems, so further inspection is required)
     CACHING_ERROR_CODES = ['5010', '610']
     MISSING_PARAMETER_ERROR_CODE = '2020'
+    BUSINESS_VALIDATION_ERROR_CODES = ['6000']
 
     def __init__(self,
                  qbs,
@@ -192,7 +197,24 @@ class QBOErrorHandler(LoggedClass):
 
         return False
 
+    def has_business_validation_errors(self) -> bool:
+        if (
+            len(self.error_df) > 0 and
+            'code' in self.error_df.columns and
+            self.error_df.code.isin(self.BUSINESS_VALIDATION_ERROR_CODES).any()
+        ):
+            if 'Detail' in self.error_df.columns:
+                return len(
+                    self.error_df.loc[
+                        self.error_df.Detail.fillna('').str.contains('Please wait a few minutes and try again')
+                    ]
+                ) > 0
+
+        return False
+
     def resolve(self) -> None:
+        # Will lightly refactor for DRY soon
+
         if self.has_caching_errors():
             self.info('')
             self.info('')
@@ -224,6 +246,34 @@ class QBOErrorHandler(LoggedClass):
             else:
                 restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
                 raise CachingError(error_detail, name=error_name, code=error_code)
+
+        elif self.has_business_validation_errors():
+            self.info('')
+            self.info('')
+            self.info('===============================================================================================')
+            self.info(f'BUSINESS VALIDATION ERROR DETECTED')
+            self.info('===============================================================================================')
+
+            try:
+                error = self.error_df.loc[self.error_df.code.isin(self.BUSINESS_VALIDATION_ERROR_CODES)].iloc[0]
+                error_name = error.get('Message')
+                error_code = error.get('code')
+                error_detail = error.get('Detail')
+                fix_msg = f'Waiting and retrying call in response to temporary business validation error'
+
+                self.info(f'error_name:   {error_name}')
+                self.info(f'error_code:   {error_code}')
+                self.info(f'error_detail: {error_detail}')
+                self.info(fix_msg)
+                self._qbs.qba.api_logger.info(fix_msg)
+
+                self.info('===========================================================================================')
+                self.info('')
+                self.info('')
+            except Exception:
+                self.exception()
+            else:
+                raise BusinessValidationError(error_detail, name=error_name, code=error_code)
 
 
 if __name__ == '__main__':
@@ -403,17 +453,35 @@ if __name__ == '__main__':
         'time': '2024-04-22T18:38:22.315-07:00'
     }
 
+    bus_val = {
+        'Fault': {
+            'Error': [
+                {
+                    'Message': 'A business validation error has occurred while processing your request',
+                    'Detail': 'Business Validation Error: An unexpected error occurred while accessing or saving '
+                              'your data. Please wait a few minutes and try again. If the problem persists, contact '
+                              'customer support.',
+                    'code': '6000',
+                    'element': ''
+                }
+            ],
+            'type': 'ValidationFault'
+        },
+        'time': '2024-04-11T20:21:08.175-07:00'
+    }
+
+
     from finoptimal.ledger.qbo2.qbosesh import QBOSesh
 
     sesh = QBOSesh('foco', verbosity=2)
-    er = QBOErrorHandler(sesh.qbs, None)
 
-    for data in [stale_object_error, not_found, ar_customer, batch]:
+    for data in [bus_val, batch, error_dict]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
-        # print(er.faults)
-        # print(er.error_df)
-        print(er.has_caching_errors())
-        import ipdb
 
-        ipdb.set_trace()
-        # er.resolve()
+        try:
+            er.resolve()
+        except BusinessValidationError as e:
+            print(dir(e))
+        else:
+            print('Nothing to resolve')
+
