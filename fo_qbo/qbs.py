@@ -25,7 +25,7 @@ from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, void, returns
 from finoptimal.utilities import retry
-from fo_qbo.errors import RateLimitError, QBOErrorHandler
+from fo_qbo.errors import BusinessValidationError, QBOErrorHandler, RateLimitError
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 from .qbo import QBO
@@ -133,6 +133,7 @@ class QBS(LoggedClass):
 
     @retry(max_tries=2, delay_secs=0.2, drag_factor=1, exceptions=(ConnectionError,))
     @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
+    @retry(max_tries=4, delay_secs=5, drag_factor=5, exceptions=(BusinessValidationError,))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
