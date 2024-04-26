@@ -57,7 +57,7 @@ class QBAuth2(LoggedClass):
         'rt_acquired_at'
     ]
 
-    MINOR_API_VERSION = 65
+    MINOR_API_VERSION = 70
 
     def __init__(self, client_code: str, modifier: Optional[str] = None, verbosity: int = 0, env: Optional[str] = None):
         super().__init__()
