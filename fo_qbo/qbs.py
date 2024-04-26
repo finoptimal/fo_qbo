@@ -83,6 +83,17 @@ class QBS(LoggedClass):
         if self.qbo_env == "sandbox":
             self.info(f'API_BASE_URL = {self.API_BASE_URL}')
 
+
+    @property
+    def minor_version(self):
+        return self.mav
+
+
+    @minor_version.setter
+    def minor_version(self, mv):
+        self.mav = mv
+
+
     @property
     def mav(self) -> int:
         return self.qba.minor_api_version
