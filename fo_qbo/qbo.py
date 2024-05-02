@@ -91,7 +91,7 @@ class QBO:
     SPECIAL_ACCOUNTS = ["<QBO TAX ACCOUNT>"]
 
     # QBO does not support Change Data Capture operations for these API entities (also JournalCode)
-    BROKEN_CDC_OBJECTS = ["TaxAgency", "TaxCode", "TaxRate", "TimeActivity"]
+    BROKEN_CDC_OBJECTS = ["TaxAgency", "TaxCode", "TaxRate"]  #, "TimeActivity"]
 
     UNCACHABLE_OBJECTS = ["ExchangeRate"]
 
