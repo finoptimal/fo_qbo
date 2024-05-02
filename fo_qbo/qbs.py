@@ -19,8 +19,9 @@ from base64 import b64encode
 from typing import Union, Optional
 
 import google.cloud.logging as logging_gcp
-
 import requests
+from intuitlib.exceptions import AuthClientError
+
 from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, void, returns
@@ -218,16 +219,22 @@ class QBS(LoggedClass):
 
         # Up to this point we are just building the request parameters and troubleshooting utilities
 
-        response = self.qba.request(
-            request_type.upper(),
-            url,
-            header_auth=True,
-            realm=self.cid,
-            verify=True,
-            headers=headers,
-            data=data,
-            **params
-        )
+        try:
+            response = self.qba.request(
+                request_type.upper(),
+                url,
+                header_auth=True,
+                realm=self.cid,
+                verify=True,
+                headers=headers,
+                data=data,
+                **params
+            )
+        except AuthClientError as e:
+            response_data = e.response.json()
+            handler = QBOErrorHandler(qbs=self, response_data=response_data)
+            handler.resolve()
+            raise e
 
         self.last_response = response
 
