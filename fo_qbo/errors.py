@@ -3,6 +3,7 @@ from typing import Optional, Union
 import pandas as pd
 import requests
 
+from finoptimal.firstaid.qbo import create_disconnection_ticket
 from finoptimal.logging import LoggedClass
 
 
@@ -67,6 +68,7 @@ class QBOErrorHandler(LoggedClass):
             if response is not None:
                 self.response = response
             elif response_data is not None:
+                self.response_data = response_data
                 self.faults = response_data
 
         except Exception as ex:
@@ -80,6 +82,7 @@ class QBOErrorHandler(LoggedClass):
 
     def reset_state(self) -> None:
         del self.response
+        del self.response_data
         del self.faults
         del self.error_df
 
@@ -139,11 +142,24 @@ class QBOErrorHandler(LoggedClass):
             except Exception:
                 self.exception()
 
+        self.response_data = response_data
         self.faults = response_data
 
     @response.deleter
     def response(self) -> None:
         self._response = None
+
+    @property
+    def response_data(self) -> Union[dict, list, None]:
+        return self._response_data
+
+    @response_data.setter
+    def response_data(self, response_data: Union[dict, list]) -> None:
+        self._response_data = response_data
+
+    @response_data.deleter
+    def response_data(self) -> None:
+        self._response_data = None
 
     @property
     def faults(self) -> list:
@@ -212,6 +228,9 @@ class QBOErrorHandler(LoggedClass):
 
         return False
 
+    def has_authorization_errors(self) -> bool:
+        return isinstance(self.response_data, dict) and self.response_data.get('x_error_reason') == 'user_not_in_realm'
+
     def resolve(self) -> None:
         # Will lightly refactor for DRY soon
 
@@ -274,6 +293,9 @@ class QBOErrorHandler(LoggedClass):
                 self.exception()
             else:
                 raise BusinessValidationError(error_detail, name=error_name, code=error_code)
+
+        elif self.has_authorization_errors():
+            create_disconnection_ticket(client_code=self._qbs.client_code, user_not_in_realm=True)
 
 
 if __name__ == '__main__':
@@ -470,18 +492,30 @@ if __name__ == '__main__':
         'time': '2024-04-11T20:21:08.175-07:00'
     }
 
+    user_not_in_realm = {
+        'error_description': 'Unauthorized Request: User is not a member of the specified Realm',
+        'x_error_reason': 'user_not_in_realm',
+        'x_error_reason_detail': 'The user is not in the specified realm',
+        'error': 'invalid_grant'
+    }
+
 
     from finoptimal.ledger.qbo2.qbosesh import QBOSesh
 
     sesh = QBOSesh('foco', verbosity=2)
 
-    for data in [bus_val, batch, error_dict]:
+    for data in [user_not_in_realm, batch, stale_object_error, ar_customer, not_found, bus_val]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
+        print(er.has_caching_errors())
+        print(er.has_business_validation_errors())
+        print(er.has_authorization_errors())
 
-        try:
-            er.resolve()
-        except BusinessValidationError as e:
-            print(dir(e))
-        else:
-            print('Nothing to resolve')
+        # import ipdb;ipdb.set_trace()
+        #
+        # try:
+        #     er.resolve()
+        # except BusinessValidationError as e:
+        #     print(dir(e))
+        # else:
+        #     print('Nothing to resolve')
 
