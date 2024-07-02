@@ -170,6 +170,9 @@ class QBAuth2(LoggedClass):
     @property
     def logged_in(self) -> bool:
         """bool: This means, at the very least, that we had a refresh token upon instantiation."""
+        if self.last_call_was_unauthorized == True:
+            return False
+
         return self._logged_in
 
     @property
@@ -383,6 +386,7 @@ class QBAuth2(LoggedClass):
         try:
             msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
                    f"{status_code} {reason} - {method} {response_url} - {resp.json()}")
+
         except Exception:
             msg = (f"{resp.__hash__()} - {self.caller} - {self.client_code}({self.business_context}) - "
                    f"{status_code} {reason} - {method} {response_url} - None")
@@ -392,26 +396,29 @@ class QBAuth2(LoggedClass):
         if resp.status_code == 401:
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
+            self.last_call_was_unauthorized = True
             raise UnauthorizedError(f'{status_code} {reason}')
 
-            # self.request(
-            #     request_type,
-            #     url,
-            #     header_auth=header_auth,
-            #     realm=realm,
-            #     verify=verify,
-            #     headers=headers,
-            #     data=data,
-            #     **params
-            # )
+        self.last_call_was_unauthorized = False
 
-        elif resp.status_code == 429:
+        if resp.status_code == 429:
             raise RateLimitError(f'{status_code} {reason}')
-            
+
         if self.vb > 10:
             self.print("response code:", resp.status_code)
             
         return resp
+
+    @property
+    def last_call_was_unauthorized(self):
+        if not hasattr(self, "_last_call_was_unauthorized"):
+            self.last_call_was_unauthorized = None
+
+        return self._last_call_was_unauthorized
+
+    @last_call_was_unauthorized.setter
+    def last_call_was_unauthorized(self, was_unauthed):
+        self._last_call_was_unauthorized = was_unauthed
 
     @logger.timeit(**void)
     def establish_access(self) -> None:
@@ -438,6 +445,7 @@ class QBAuth2(LoggedClass):
                 
             try:
                 self.refresh()
+
             except Exception:
                 # Now we expect refresh() to handle ALL AuthClientErrors internally, so we WILL raise an exception here.
                 raise
@@ -450,6 +458,7 @@ class QBAuth2(LoggedClass):
         Out of Band solution adapted from QBAuth.
         """
         self.authorize_url = self.session.get_authorization_url(self.SCOPES)
+        self.print(f"({self}.vb = {self.vb})")
         self.print("Please send the user here to authorize this app to access their QBO data:\n")
         self.print(self.authorize_url)
 
@@ -494,6 +503,7 @@ class QBAuth2(LoggedClass):
     def log_token_fix(self, from_log: bool) -> None:
         if from_log:
             msg = f'Fixed {self.client_code} AuthClientError using GCP logs'
+
         else:
             msg = f'Fixed {self.client_code} AuthClientError using GCP bucket'
 
@@ -525,6 +535,7 @@ class QBAuth2(LoggedClass):
             self.session.refresh()
 
         except AuthClientError:
+            self.last_call_was_unauthorized = True
             self.exception()
 
             self.token_logger.info(
@@ -548,6 +559,7 @@ class QBAuth2(LoggedClass):
             return
 
         else:
+            self.last_call_was_unauthorized = False
             self.reset_auth_client_error_retry_count()
             self.new_token = True
             self._access_token  = self.session.access_token
