@@ -500,9 +500,13 @@ class QBAuth2(LoggedClass):
             access_token=self.access_token,
         )
 
+    @property
+    def fixed_from_gcp_logs_text_payload(self):
+        return f'Fixed {self.client_code} AuthClientError using GCP logs'
+
     def log_token_fix(self, from_log: bool) -> None:
         if from_log:
-            msg = f'Fixed {self.client_code} AuthClientError using GCP logs'
+            msg = self.fixed_from_gcp_logs_text_payload
 
         else:
             msg = f'Fixed {self.client_code} AuthClientError using GCP bucket'
@@ -588,7 +592,8 @@ class QBAuth2(LoggedClass):
         filters = ' AND '.join([
             f'labels.client_code="{self.client_code}"',
             'labels.access_token!= null',
-            f'timestamp>"{lookback_period}"'
+            f'timestamp>"{lookback_period}"',
+            f'text_payload!="{self.fixed_from_gcp_logs_text_payload}"', # Ignore the FIX entries!!!
         ])
 
         log_entries = self.token_logger.list_entries(filter_=filters, order_by=DESCENDING, max_results=3)
@@ -596,6 +601,7 @@ class QBAuth2(LoggedClass):
         return [entry for entry in log_entries]
 
     def get_latest_tokens_from_log(self) -> dict:
+        """Get the LATEST one, not just the last; sometimes with race conditions we pull the wrong one!"""
         tokens = {
             'access_token': None,
             'refresh_token': None,
@@ -604,14 +610,22 @@ class QBAuth2(LoggedClass):
 
         try:
             entries = self.get_token_log_entries()
+
         except Exception:
             entries = []
 
-        if len(entries) > 0:
-            latest_entry = entries[0]
-            tokens['access_token'] = latest_entry.labels.get('access_token')
-            tokens['refresh_token'] = latest_entry.labels.get('refresh_token')
-            tokens['expires_at'] = str(latest_entry.timestamp + datetime.timedelta(minutes=58)).split('+')[0]
+        if len(entries) < 1:
+            return tokens
+
+        latest_entry = entries[0]
+        tokens['access_token'] = latest_entry.labels.get('access_token')
+        tokens['refresh_token'] = latest_entry.labels.get('refresh_token')
+        tokens['expires_at'] = str(latest_entry.timestamp + datetime.timedelta(minutes=58)).split('+')[0]
+
+        if self.vb > 2:
+            print(json.dumps(tokens, indent=4))
+            print("Getting the LATEST successfully-exchanged token (excluding fixes, per TM-1496))")
+            import ipdb;ipdb.set_trace()
 
         return tokens
 
