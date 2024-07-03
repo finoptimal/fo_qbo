@@ -9,6 +9,7 @@ import json
 import requests
 import sys
 from typing import Union, Optional
+from defusedxml import ElementTree
 
 from intuitlib.client import AuthClient
 from intuitlib.exceptions import AuthClientError
@@ -109,15 +110,24 @@ class QBAuth2(LoggedClass):
         self.api_logger.context = self.logger_context
         self.token_logger.context = self.logger_context
 
+
+    @property
+    def cc(self):
+        return self.client_code
+
+
     @property
     def auth_client_error_retry_count(self) -> int:
         return self._auth_client_error_retry_count
 
+
     def increment_auth_client_error_retry_count(self) -> None:
         self._auth_client_error_retry_count += 1
 
+
     def reset_auth_client_error_retry_count(self) -> None:
         self._auth_client_error_retry_count = 0
+
 
     @property
     def logger_context(self) -> dict:
@@ -128,6 +138,7 @@ class QBAuth2(LoggedClass):
             'caller': self.caller,
             'realm_id': self.realm_id
         }
+
 
     @property
     def initial_access_token(self) -> Union[str, None]:
@@ -145,10 +156,12 @@ class QBAuth2(LoggedClass):
 
         return self._initial_access_token
 
+
     @property
     def business_context(self) -> str:
         """str: 'service' for service business client, 'saas' for SaaS client."""
         return self._business_context
+
 
     @property
     def credentials(self) -> dict:
@@ -158,14 +171,17 @@ class QBAuth2(LoggedClass):
 
         return self._credentials
 
+
     @credentials.setter
     def credentials(self, credentials: dict) -> None:
         # This will NOT update the service account credentials
         self._update_credentials(credentials)
 
+
     @credentials.deleter
     def credentials(self) -> None:
         del self._credentials
+
 
     @property
     def logged_in(self) -> bool:
@@ -174,6 +190,7 @@ class QBAuth2(LoggedClass):
             return False
 
         return self._logged_in
+
 
     @property
     def sub_client_code(self) -> Union[str, None]:
@@ -185,25 +202,30 @@ class QBAuth2(LoggedClass):
         """
         return self._sub_client_code
 
+
     @property
     def client_id(self) -> str:
         """str: The client id, which is used to authenticate our app."""
         return self._client_id
+
 
     @property
     def client_secret(self) -> str:
         """str: The client secret, which is used to authenticate our app."""
         return self._client_secret
 
+
     @property
     def callback_url(self) -> str:
         """str: The callback URL for OAuth."""
         return self._callback_url
 
+
     @property
     def access_token(self) -> str:
         """str: The access token, which expires every hour."""
         return self._access_token
+
 
     @property
     def refresh_token(self) -> str:
@@ -212,6 +234,7 @@ class QBAuth2(LoggedClass):
         Refresh tokens may change, too.
         """
         return self._refresh_token
+
 
     @property
     def realm_id(self) -> str:
@@ -394,6 +417,34 @@ class QBAuth2(LoggedClass):
         self.api_logger.info(msg[:5000], method=method, status_code=status_code, reason=reason, url=response_url)
 
         if resp.status_code == 401:
+            # Is this an xml error (instead of the expected JSON one)?
+            try:
+                et = ElementTree.fromstring(resp.text)
+                is_xml = True
+
+            except:
+                is_xml = False
+
+            if is_xml:
+                try:
+                    fault_type = et[0].get("type", "Unnamed 401 Fault")
+                    code = et[0][0].get("code", "-1")
+                    message = et[0][0][0].text
+                    detail = et[0][0][1].text
+                    fault_time = et.get("time")
+                    parsed_xml = True
+                    reason = f"{reason} // XML response with Error code {code} at {fault_time}: {detail}"
+
+                except:
+                    parsed_xml = False
+                    reason = f"Unparsed XML response with reason {reason}"
+
+            if self.vb > 1:
+                print(resp.text)
+                print("\n\nsee 401 resp.text above ^^\n")
+                if self.vb > 4:
+                    print("\n\n^^ Inspect 401 error more closely!? ^^")
+                    import ipdb;ipdb.set_trace()
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True
