@@ -289,8 +289,10 @@ class QBOErrorHandler(LoggedClass):
                 self.info('===========================================================================================')
                 self.info('')
                 self.info('')
+
             except Exception:
                 self.exception()
+
             else:
                 raise BusinessValidationError(error_detail, name=error_name, code=error_code)
 

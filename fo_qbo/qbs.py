@@ -143,20 +143,20 @@ class QBS(LoggedClass):
     def logged_in(self) -> bool:
         return self.qba.logged_in
 
+    #@retry(max_tries=4, delay_secs=5, drag_factor=5, exceptions=(BusinessValidationError,))
     @retry(max_tries=2, delay_secs=0.2, drag_factor=1, exceptions=(ConnectionError,))
     @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
-    @retry(max_tries=4, delay_secs=5, drag_factor=5, exceptions=(BusinessValidationError,))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
         params often get used for the Reports API, not for CRUD ops.
         """
         headers  = {"accept": "application/json"}
-        original_params = params.copy()
-        original_data   = None
+        # original_params = params.copy()
+        # original_data   = None
 
-        if isinstance(data, str):
-            original_data = data + ""
+        # if isinstance(data, str):
+        #     original_data = data + ""
             
         if "minorversion" not in params.get("params", {}) and self.mav is not None:
             if "params" not in params:
