@@ -448,6 +448,7 @@ class QBAuth2(LoggedClass):
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True
+            reason = f"{self.realm_id} realm error // {reason}"
             raise UnauthorizedError(f'{status_code} {reason}')
 
         self.last_call_was_unauthorized = False
