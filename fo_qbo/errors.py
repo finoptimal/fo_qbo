@@ -67,6 +67,7 @@ class QBOErrorHandler(LoggedClass):
         try:
             if response is not None:
                 self.response = response
+
             elif response_data is not None:
                 self.response_data = response_data
                 self.faults = response_data
@@ -248,7 +249,9 @@ class QBOErrorHandler(LoggedClass):
                 error_name = error.get('Message')
                 error_code = error.get('code')
                 error_detail = error.get('Detail')
-                rollback_days = 2
+                # Try to cover workflows that only run monthly; approximate to be sure...better would be to look at the
+                #  update stamp of the conflicted entries and roll back THAT far...
+                rollback_days = 40
                 fix_msg = f'Rolling back {self._qbs.client_code} cache {rollback_days} day(s) to resolve {error_name}'
 
                 self.info(f'error_name:   {error_name}')
@@ -265,7 +268,7 @@ class QBOErrorHandler(LoggedClass):
                 self.exception()
 
             else:
-                self.note(f"Rolling back cache {rollback_days} day(s) to resolve {error_name}", tracer_at=3)
+                self.note(fix_msg, tracer_at=3)
                 restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
                 raise CachingError(error_detail, name=error_name, code=error_code)
 
