@@ -204,11 +204,6 @@ class QBS(LoggedClass):
             self.print(json.dumps(params, indent=4))
             self.print(json.dumps(headers, indent=4))
 
-            if self.vb > 19:
-                self.print("inspect request_type, url, headers, data, and params:")
-                import ipdb
-                ipdb.set_trace()
-
         self.last_call = {
             "request_type": request_type.upper(),
             "url"         : url,

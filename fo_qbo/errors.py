@@ -260,9 +260,12 @@ class QBOErrorHandler(LoggedClass):
                 self.info('===========================================================================================')
                 self.info('')
                 self.info('')
+
             except Exception:
                 self.exception()
+
             else:
+                self.note(f"Rolling back cache {rollback_days} day(s) to resolve {error_name}", tracer_at=3)
                 restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
                 raise CachingError(error_detail, name=error_name, code=error_code)
 
