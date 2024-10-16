@@ -505,8 +505,8 @@ class QBS(LoggedClass):
         """
         url = f"{self.API_BASE_URL}/{self.cid}/reports/{report_name}"
 
-        if self.vb > 7:
-            self.print(json.dumps(params, indent=4))
+        self.note(f"{report_name} params:\n\n{json.dumps(params, indent=4)}",
+                  tracer_at=8, inspection_message="Inspect params")
 
         raw = self._basic_call(request_type="GET", url=url, **{"params" : params})
 
