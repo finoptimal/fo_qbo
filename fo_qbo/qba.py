@@ -439,12 +439,7 @@ class QBAuth2(LoggedClass):
                     parsed_xml = False
                     reason = f"Unparsed XML response with reason {reason}"
 
-            if self.vb > 1:
-                print(resp.text)
-                print("\n\nsee 401 resp.text above ^^\n")
-                if self.vb > 4:
-                    print("\n\n^^ Inspect 401 error more closely!? ^^")
-                    import ipdb;ipdb.set_trace()
+            self.note(resp.text, inspection_message="^^ Inspect 401 error more closely!? ^^", tracer_at=5)
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True
@@ -609,6 +604,8 @@ class QBAuth2(LoggedClass):
 
             else:
                 self.increment_auth_client_error_retry_count()
+                self.note(f"About to raise AuthClientError when attempting to refresh!", tracer_at=3,
+                          inspection_message="Maybe raise something different that includes client_code and realm!?")
                 raise
 
             self.reset_auth_client_error_retry_count()
