@@ -483,7 +483,8 @@ class QBS(LoggedClass):
 
         if isinstance(utc_since, datetime.datetime):
             # Either pass in a UTC datetime or a string formatted like this:
-            utc_since = utc_since.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            #utc_since = utc_since.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            utc_since = utc_since.strftime("%Y-%m-%dT%H:%M:%S-00:00") # Minus, Not Plus; THANKS, INTUIT! #440519
 
         params = {
             "changedSince" : utc_since,
