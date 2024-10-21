@@ -26,7 +26,7 @@ from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, void, returns
 from finoptimal.utilities import retry
-from fo_qbo.errors import BusinessValidationError, QBOErrorHandler, RateLimitError
+from fo_qbo.errors import TryAgainBusinessValidationError, QBOErrorHandler, RateLimitError
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 from .qbo import QBO
@@ -143,9 +143,9 @@ class QBS(LoggedClass):
     def logged_in(self) -> bool:
         return self.qba.logged_in
 
-    #@retry(max_tries=4, delay_secs=5, drag_factor=5, exceptions=(BusinessValidationError,))
+    @retry(max_tries=3, delay_secs=5, drag_factor=5, exceptions=(TryAgainBusinessValidationError,))
     @retry(max_tries=2, delay_secs=0.2, drag_factor=1, exceptions=(ConnectionError,))
-    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
+    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError, ))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
@@ -225,6 +225,7 @@ class QBS(LoggedClass):
                 data=data,
                 **params
             )
+
         except AuthClientError as e:
             response_data = e.response.json()
             handler = QBOErrorHandler(qbs=self, response_data=response_data)

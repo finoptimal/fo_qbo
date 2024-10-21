@@ -32,6 +32,14 @@ class BusinessValidationError(TechnicalError):
     pass
 
 
+class TryAgainBusinessValidationError(BusinessValidationError):
+    """
+    Intermittent error we want to stuff and basically just retry:
+      https://help.developer.intuit.com/s/question/0D54R00008xOl3zSAC/getting-error-6000-an-unexpected-error-occurred-while-accessing-or-saving-your-data-but-the-entity-saves-anyway
+    """
+    pass
+
+
 class QBOErrorHandler(LoggedClass):
     """
     Aims to resolve QBO errors inplace.
@@ -140,6 +148,7 @@ class QBOErrorHandler(LoggedClass):
 
             try:
                 response_data = self._response.json()
+
             except Exception:
                 self.exception()
 
@@ -188,6 +197,7 @@ class QBOErrorHandler(LoggedClass):
     def error_df(self, faults: list) -> None:
         try:
             self._error_df = self.get_error_df(faults)
+
         except Exception:
             self.exception()
             del self.error_df
@@ -214,7 +224,7 @@ class QBOErrorHandler(LoggedClass):
 
         return False
 
-    def has_business_validation_errors(self) -> bool:
+    def has_try_again_business_validation_errors(self) -> bool:
         if (
             len(self.error_df) > 0 and
             'code' in self.error_df.columns and
@@ -272,7 +282,7 @@ class QBOErrorHandler(LoggedClass):
                 restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
                 raise CachingError(error_detail, name=error_name, code=error_code)
 
-        elif self.has_business_validation_errors():
+        elif self.has_try_again_business_validation_errors():
             self.info('')
             self.info('')
             self.info('===============================================================================================')
@@ -300,7 +310,8 @@ class QBOErrorHandler(LoggedClass):
                 self.exception()
 
             else:
-                raise BusinessValidationError(error_detail, name=error_name, code=error_code)
+                self.note("About to raise TryAgainBusinessValidationError!", tracer_at=3)
+                raise TryAgainBusinessValidationError(error_detail, name=error_name, code=error_code)
 
         elif self.has_authorization_errors():
             create_disconnection_ticket(client_code=self._qbs.client_code, user_not_in_realm=True)
@@ -515,7 +526,7 @@ if __name__ == '__main__':
     for data in [user_not_in_realm, batch, stale_object_error, ar_customer, not_found, bus_val]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
         print(er.has_caching_errors())
-        print(er.has_business_validation_errors())
+        print(er.has_try_again_business_validation_errors())
         print(er.has_authorization_errors())
 
         # import ipdb;ipdb.set_trace()
