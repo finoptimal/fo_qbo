@@ -1,7 +1,7 @@
 """
 QBO Rest API Client
 
-Copyright 2016-2022 FinOptimal, Inc. All rights reserved.
+Copyright 2016-2024 FinOptimal, Inc. All rights reserved.
 """
 import datetime
 import os
@@ -16,6 +16,7 @@ from intuitlib.exceptions import AuthClientError
 from intuitlib.enums import Scopes
 from google.cloud.logging import DESCENDING
 
+from finoptimal.exceptions import APIError
 from finoptimal.logging import get_logger, LoggedClass, void, returns, GoogleCloudLogger
 from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
@@ -241,24 +242,29 @@ class QBAuth2(LoggedClass):
         """str: The client's realm id."""
         return self._realm_id
 
+
     @property
     def expires_at(self) -> Union[str, None]:
         """str: The timestamp of when the access_token expires."""
         return self._expires_at
+
 
     @property
     def rt_acquired_at(self) -> str:
         """str: The timestamp of when the refresh token was acquired."""
         return self._rt_acquired_at
 
+
     @property
     def minor_api_version(self) -> int:
         """int: The minor API version the client is using."""
         return self._minor_api_version
 
+
     @minor_api_version.setter
     def minor_api_version(self, version_number):
         self._minor_api_version = version_number
+
 
     @property
     def caller(self) -> Union[str, None]:
@@ -270,6 +276,7 @@ class QBAuth2(LoggedClass):
                 self._caller = None
 
         return self._caller
+
 
     def _get_credentials(self) -> dict:
         """Returns the credentials (client + service account) from the Google Cloud bucket."""
@@ -287,6 +294,7 @@ class QBAuth2(LoggedClass):
 
         return credentials
 
+
     def _refresh_credential_attributes(self) -> None:
         """Use `self.credentials` to update the associated instance attributes."""
         # From service account
@@ -303,6 +311,7 @@ class QBAuth2(LoggedClass):
         self.minor_api_version = self.credentials.get('minor_api_version')
         self.minor_api_version = self.minor_api_version if self.minor_api_version else self.MINOR_API_VERSION
 
+
     def _update_credentials(self, credentials: dict) -> None:
         """Update the credentials (client only) in Google Cloud.
 
@@ -316,9 +325,11 @@ class QBAuth2(LoggedClass):
         client_credentials.update(credentials)
         self.fo_darkonim.client_credentials = client_credentials
 
+
     def _delete_credentials(self) -> None:
         """Deletes the client's credentials from the Google Cloud bucket."""
         self.fo_darkonim.delete_client_credentials()
+
 
     def _login(self) -> bool:
         """
@@ -348,6 +359,7 @@ class QBAuth2(LoggedClass):
 
         return self._logged_in
 
+
     @property
     def active_credentials(self) -> dict:
         return {
@@ -356,6 +368,7 @@ class QBAuth2(LoggedClass):
             'expires_at': self.expires_at,
             'company_id': self.realm_id
         }
+
 
     def save_new_tokens(self) -> None:
         if self.new_token:
@@ -372,10 +385,12 @@ class QBAuth2(LoggedClass):
             self.new_token = False
             self.new_refresh_token = False
 
+
     def reload_credentials(self) -> None:
         """Reload credentials from the Google Cloud bucket and reset the related attributes."""
         del self.credentials
         self._refresh_credential_attributes()
+
 
     @retry(max_tries=4, exceptions=(UnauthorizedError,))
     @logger.timeit(**returns, expand=True)
@@ -456,6 +471,7 @@ class QBAuth2(LoggedClass):
             
         return resp
 
+
     @property
     def last_call_was_unauthorized(self):
         if not hasattr(self, "_last_call_was_unauthorized"):
@@ -463,9 +479,11 @@ class QBAuth2(LoggedClass):
 
         return self._last_call_was_unauthorized
 
+
     @last_call_was_unauthorized.setter
     def last_call_was_unauthorized(self, was_unauthed):
         self._last_call_was_unauthorized = was_unauthed
+
 
     @logger.timeit(**void)
     def establish_access(self) -> None:
@@ -499,6 +517,7 @@ class QBAuth2(LoggedClass):
         
         self._has_access = True
 
+
     @logger.timeit(**void)
     def oob(self):
         """
@@ -515,6 +534,7 @@ class QBAuth2(LoggedClass):
             authorized_callback_url = input("\nPaste the entire callback URL back here (or ctrl-c):")
 
         self.handle_authorized_callback_url(authorized_callback_url)
+
 
     @logger.timeit(**void)
     def handle_authorized_callback_url(self, url):
@@ -533,9 +553,11 @@ class QBAuth2(LoggedClass):
         self.new_token         = True
         self.new_refresh_token = True
 
+
     def log_pending_token_event(self) -> None:
         self.info(f"\nRefreshing {self.realm_id}'s refresh and access tokens!")
         self.token_logger.info(f"Refreshing {self.realm_id}'s refresh and access tokens!")
+
 
     def log_token_event_outcome(self) -> None:
         self.info(f'New access token for realm id {self.realm_id}: {self.access_token}')
@@ -547,9 +569,11 @@ class QBAuth2(LoggedClass):
             access_token=self.access_token,
         )
 
+
     @property
     def fixed_from_gcp_logs_text_payload(self):
         return f'Fixed {self.client_code} AuthClientError using GCP logs'
+
 
     def log_token_fix(self, from_log: bool) -> None:
         if from_log:
@@ -585,7 +609,7 @@ class QBAuth2(LoggedClass):
         try:
             self.session.refresh()
 
-        except AuthClientError:
+        except AuthClientError as ace:
             self.last_call_was_unauthorized = True
             self.exception()
 
@@ -604,8 +628,25 @@ class QBAuth2(LoggedClass):
 
             else:
                 self.increment_auth_client_error_retry_count()
-                self.note(f"About to raise AuthClientError when attempting to refresh!", tracer_at=3,
-                          inspection_message="Maybe raise something different that includes client_code and realm!?")
+                if self._auth_client_error_retry_count > 2:
+                    kwargs = dict( # because otherwise higher-up retries will repeat this trio AGAIN!
+                        error_slug="qbo-api-error-auth-refresh",
+                        while_trying_to=f"refresh {self}'s access/refresh token!",
+                        retries=2,
+                        realm_id=self.realm_id,
+                        team_slug=self.client_code,
+                        intuit_id=ace.intuit_tid,
+                        detail=str(ace),
+                    )
+                    self.note(
+                        " ".join([
+                            json.dumps(kwargs),
+                            f"{self} --> APIError from AuthClientError when attempting to refresh!",
+                        ]),
+                        tracer_at=6)
+
+                    raise APIError(kwargs) from ace
+
                 raise
 
             self.reset_auth_client_error_retry_count()
@@ -619,6 +660,7 @@ class QBAuth2(LoggedClass):
             self._refresh_token = self.session.refresh_token
             self.save_new_tokens()
             self.log_token_event_outcome()
+
 
     @logger.timeit(**void)
     def disconnect(self):
@@ -724,5 +766,7 @@ class QBAuth2(LoggedClass):
 
         return fixed
 
+
+
     def __repr__(self):
-        return "<QBAuth (Oauth Version 2)>"
+        return f"<{self.cc} QBAuth for {self.realm_id} realm>"

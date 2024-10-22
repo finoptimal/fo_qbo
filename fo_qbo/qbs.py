@@ -123,21 +123,26 @@ class QBS(LoggedClass):
     def cls(self) -> Union[str, None]:
         return self.qba.client_secret
 
+
     @property
     def exa(self) -> Union[str, None]:
         return self.qba.expires_at
+
 
     @property
     def rtaa(self) -> Union[str, None]:
         return self.qba.rt_acquired_at
 
+
     @property
     def cbu(self) -> Union[str, None]:
         return self.qba.callback_url
 
+
     @property
     def business_context(self) -> str:
         return self.qba.business_context
+
 
     @property
     def logged_in(self) -> bool:
@@ -243,14 +248,9 @@ class QBS(LoggedClass):
             # For troubleshooting
             self.resps[intuit_tid] = (response.request.url, response.request.body, response)
 
-        if self.vb > 7:
-            self.print("The final URL (with params):")
-            self.print(response.url)
-
-            if self.vb > 15:
-                self.print("inspect response:")
-                import ipdb
-                ipdb.set_trace()
+        self.note(
+            f"The final URL (with params): {response.url}",
+            inspection_message="Inspect response:", tracer_at=16)
 
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
