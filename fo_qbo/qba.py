@@ -16,7 +16,7 @@ from intuitlib.exceptions import AuthClientError
 from intuitlib.enums import Scopes
 from google.cloud.logging import DESCENDING
 
-from finoptimal.exceptions import APIError
+from finoptimal.exceptions import CompromisedQBOConnectionError
 from finoptimal.logging import get_logger, LoggedClass, void, returns, GoogleCloudLogger
 from finoptimal.storage.fo_darkonim_bucket import FODarkonimBucket
 from finoptimal.utilities import retry
@@ -399,7 +399,6 @@ class QBAuth2(LoggedClass):
         We don't handle authorization until the session's first request happens.
         """
         self.establish_access()
-
         auth_header = f'Bearer {self.session.access_token}'
         _headers = {
             'Authorization': auth_header,
@@ -432,6 +431,7 @@ class QBAuth2(LoggedClass):
         self.api_logger.info(msg[:5000], method=method, status_code=status_code, reason=reason, url=response_url)
 
         if resp.status_code == 401:
+            self.request_attempt_index = getattr(self, "request_attempt_index", 0) + 1
             # Is this an xml error (instead of the expected JSON one)?
             try:
                 et = ElementTree.fromstring(resp.text)
@@ -459,15 +459,34 @@ class QBAuth2(LoggedClass):
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True
             reason = f"{self.realm_id} realm error // {reason}"
-            raise UnauthorizedError(f'{status_code} {reason}')
+            if self.request_attempt_index < 4:
+                raise UnauthorizedError(f'{status_code} {reason}')
+
+            kwargs = dict(  # because otherwise higher-up retries will repeat this trio AGAIN!
+                error_slug="qbo-api-error-request",
+                while_trying_to=f"make a {self} request!",
+                retries=3,
+                realm_id=self.realm_id,
+                team_slug=self.client_code,
+                detail=resp.text,
+            )
+            self.note(
+                " ".join([
+                    json.dumps(kwargs),
+                    f"{self} --> CompromisedQBOConnectionError when attempting to request!",
+                ]),
+                tracer_at=5)
+            raise CompromisedQBOConnectionError(kwargs)
+
+        else:
+            self.request_attempt_index = 0
 
         self.last_call_was_unauthorized = False
 
         if resp.status_code == 429:
             raise RateLimitError(f'{status_code} {reason}')
 
-        if self.vb > 10:
-            self.print("response code:", resp.status_code)
+        self.note(f"response code: {resp.status_code}")
             
         return resp
 
@@ -641,12 +660,13 @@ class QBAuth2(LoggedClass):
                     self.note(
                         " ".join([
                             json.dumps(kwargs),
-                            f"{self} --> APIError from AuthClientError when attempting to refresh!",
+                            f"{self} --> CompromisedQBOConnectionError from AuthClientError when attempting to refresh!",
                         ]),
                         tracer_at=6)
 
-                    raise APIError(kwargs) from ace
+                    raise CompromisedQBOConnectionError(kwargs) from ace
 
+                # Will stimulate a retry (until we hit the max)
                 raise
 
             self.reset_auth_client_error_retry_count()
