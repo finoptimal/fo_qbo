@@ -285,6 +285,7 @@ class QBAuth2(LoggedClass):
         if self.fo_darkonim.saas:
             # Remove SaaS keys not used by AuthClient
             credentials = {k: v for k, v in credentials.items() if k not in ['redirect_uri', 'environment', 'base_url']}
+
         else:
             self._sub_client_code = credentials.get('substitute_client_code')
 
@@ -371,19 +372,21 @@ class QBAuth2(LoggedClass):
 
 
     def save_new_tokens(self) -> None:
-        if self.new_token:
-            self._expires_at = str(datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
+        if not self.new_token:
+            return
 
-            new_credentials = self.active_credentials.copy()
-            self.info(f'New credentials: {new_credentials}')
+        self._expires_at = str(datetime.datetime.utcnow() + datetime.timedelta(minutes=55))
 
-            if self.new_refresh_token:
-                new_credentials['rt_acquired_at'] = str(datetime.datetime.utcnow())
+        new_credentials = self.active_credentials.copy()
+        self.info(f'New credentials: {new_credentials}')
 
-            self.credentials = new_credentials
+        if self.new_refresh_token:
+            new_credentials['rt_acquired_at'] = str(datetime.datetime.utcnow())
 
-            self.new_token = False
-            self.new_refresh_token = False
+        self.credentials = new_credentials
+
+        self.new_token = False
+        self.new_refresh_token = False
 
 
     def reload_credentials(self) -> None:
@@ -628,7 +631,12 @@ class QBAuth2(LoggedClass):
         try:
             self.session.refresh()
 
-        except AuthClientError as ace:
+        except (
+                AuthClientError,
+                # Added after looking at #446400 and noticing that after reloading from log,
+                #  we start getting an AuthClientError:
+                ValueError,
+        ) as err:
             self.last_call_was_unauthorized = True
             self.exception()
 
@@ -654,8 +662,8 @@ class QBAuth2(LoggedClass):
                         retries=2,
                         realm_id=self.realm_id,
                         team_slug=self.client_code,
-                        intuit_id=ace.intuit_tid,
-                        detail=str(ace),
+                        intuit_id=getattr(err, "intuit_tid"),
+                        detail=str(err),
                     )
                     self.note(
                         " ".join([
@@ -664,7 +672,7 @@ class QBAuth2(LoggedClass):
                         ]),
                         tracer_at=6)
 
-                    raise CompromisedQBOConnectionError(kwargs) from ace
+                    raise CompromisedQBOConnectionError(kwargs) from err
 
                 # Will stimulate a retry (until we hit the max)
                 raise
