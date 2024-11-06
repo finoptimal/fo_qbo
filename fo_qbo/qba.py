@@ -454,7 +454,7 @@ class QBAuth2(LoggedClass):
                     parsed_xml = False
                     reason = f"Unparsed XML response with reason {reason}"
 
-            self.note(resp.text, inspection_message="^^ Inspect 401 error more closely!? ^^", tracer_at=5)
+            self.note(resp.text, im="^^ Inspect 401 error more closely!? ^^", tracer_at=5)
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True

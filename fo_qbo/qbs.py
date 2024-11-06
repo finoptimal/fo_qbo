@@ -250,7 +250,7 @@ class QBS(LoggedClass):
 
         self.note(
             f"The final URL (with params): {response.url}",
-            inspection_message="Inspect response:", tracer_at=16)
+            im="Inspect response:", tracer_at=16)
 
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
@@ -507,7 +507,7 @@ class QBS(LoggedClass):
         url = f"{self.API_BASE_URL}/{self.cid}/reports/{report_name}"
 
         self.note(f"{report_name} params:\n\n{json.dumps(params, indent=4)}",
-                  tracer_at=8, inspection_message="Inspect params")
+                  tracer_at=8, im="Inspect params")
 
         raw = self._basic_call(request_type="GET", url=url, **{"params" : params})
 
