@@ -149,7 +149,7 @@ class QBS(LoggedClass):
         return self.qba.logged_in
 
     @retry(max_tries=3, delay_secs=5, drag_factor=5, exceptions=(TryAgainBusinessValidationError,))
-    @retry(max_tries=2, delay_secs=0.2, drag_factor=1, exceptions=(ConnectionError,))
+    @retry(max_tries=3, delay_secs=5, drag_factor=2, exceptions=(ConnectionError,))
     @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError, ))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
@@ -235,6 +235,7 @@ class QBS(LoggedClass):
             response_data = e.response.json()
             handler = QBOErrorHandler(qbs=self, response_data=response_data)
             handler.resolve()
+            self.note(f"About to raise AuthClientError {str(e)} (e)", tracer_at=3)
             raise e
 
         self.last_response = response
@@ -248,9 +249,7 @@ class QBS(LoggedClass):
             # For troubleshooting
             self.resps[intuit_tid] = (response.request.url, response.request.body, response)
 
-        self.note(
-            f"The final URL (with params): {response.url}",
-            im="Inspect response:", tracer_at=16)
+        self.note(f"The final URL (with params): {response.url}", im="Inspect response:", tracer_at=16)
 
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
@@ -271,15 +270,23 @@ class QBS(LoggedClass):
                 
                 self.last_call_time = rj.get("time")
                 return rj
+
             elif headers.get("content-type") == "application/pdf":
                 return response
+
             else:
                 return response.text
 
         try:
             error_message = response.json()
+
         except:
             error_message = response.text
+
+        self.note([
+            error_message,
+            f"Do we need a new QBAuth2 object or can we just retry!?",
+        ], message_joiner="\n", im=f"Inspect error_message:", tracer_at=3)
 
         raise ConnectionError(error_message)
 
