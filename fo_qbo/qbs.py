@@ -150,7 +150,7 @@ class QBS(LoggedClass):
 
     @retry(max_tries=3, delay_secs=5, drag_factor=5, exceptions=(TryAgainBusinessValidationError,))
     @retry(max_tries=3, delay_secs=5, drag_factor=2, exceptions=(ConnectionError,))
-    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError, ))
+    @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
     @logger.timeit(**returns)
     def _basic_call(self, request_type, url, data=None, **params):
         """
@@ -240,14 +240,14 @@ class QBS(LoggedClass):
 
         self.last_response = response
 
-        if not hasattr(self, "resps"):
-            self.resps = collections.OrderedDict()
+        # if not hasattr(self, "resps"):
+        #     self.resps = collections.OrderedDict()
 
-        intuit_tid = response.headers.get("intuit_tid")
+        # intuit_tid = response.headers.get("intuit_tid")
 
-        if intuit_tid:
-            # For troubleshooting
-            self.resps[intuit_tid] = (response.request.url, response.request.body, response)
+        # if intuit_tid:
+        #     # For troubleshooting
+        #     self.resps[intuit_tid] = (response.request.url, response.request.body, response)
 
         self.note(f"The final URL (with params): {response.url}", im="Inspect response:", tracer_at=16)
 
