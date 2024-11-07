@@ -283,7 +283,7 @@ class QBS(LoggedClass):
         except:
             error_message = response.text
 
-        self.note(error_message, im=f"Do we need a new QBAuth2 object or can we just retry!?", tracer_at=3)
+        self.note(error_message, im=f"Do we need a new QBAuth2 object or can we just retry!?", tracer_at=3, log=True)
 
         raise ConnectionError(error_message)
 
