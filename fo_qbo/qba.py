@@ -695,6 +695,7 @@ class QBAuth2(LoggedClass):
         self.print(f"Disconnecting {self.realm_id}'s access token!")
         try:
             self.session.revoke(token=self.refresh_token)
+
         except AuthClientError as e:
             if e.status_code == 400:
                 pass
