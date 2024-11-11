@@ -240,16 +240,8 @@ class QBS(LoggedClass):
 
         self.last_response = response
 
-        # if not hasattr(self, "resps"):
-        #     self.resps = collections.OrderedDict()
-
-        # intuit_tid = response.headers.get("intuit_tid")
-
-        # if intuit_tid:
-        #     # For troubleshooting
-        #     self.resps[intuit_tid] = (response.request.url, response.request.body, response)
-
-        self.note(f"The final URL (with params): {response.url}", im="Inspect response:", tracer_at=16)
+        self.note(f"The final URL (with params): {response.url}, (call) data: {data}",
+                  im="Inspect response:", tracer_at=16)
 
         if response.status_code in QBOErrorHandler.SUPPORTED_STATUS_CODES:
             # Raises CachingError if problem is addressed. It is up to callers further up the stack to retry in a way
@@ -261,13 +253,7 @@ class QBS(LoggedClass):
             if headers.get("accept") == "application/json":
                 rj = response.json()
 
-                if self.vb > 10:
-                    self.print(json.dumps(rj, indent=4))
-
-                    if self.vb > 14:
-                        import ipdb
-                        ipdb.set_trace()
-                
+                self.note(rj, ta=15, print_at=11)
                 self.last_call_time = rj.get("time")
                 return rj
 
