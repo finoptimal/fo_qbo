@@ -742,10 +742,8 @@ class QBAuth2(LoggedClass):
         tokens['refresh_token'] = latest_entry.labels.get('refresh_token')
         tokens['expires_at'] = str(latest_entry.timestamp + datetime.timedelta(minutes=58)).split('+')[0]
 
-        if self.vb > 4:
-            print(json.dumps(tokens, indent=4))
-            print("Getting the LATEST successfully-exchanged token (excluding fixes, per TM-1496))")
-            import ipdb;ipdb.set_trace()
+        self.note(tokens)
+        self.note("Getting the LATEST successfully-exchanged token (excluding fixes, per TM-1496))", ta=5)
 
         return tokens
 
