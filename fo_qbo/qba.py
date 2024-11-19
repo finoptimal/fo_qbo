@@ -692,7 +692,7 @@ class QBAuth2(LoggedClass):
 
     @logger.timeit(**void)
     def disconnect(self):
-        self.print(f"Disconnecting {self.realm_id}'s access token!")
+        self.print(f"Disconnecting the {self.realm_id} access token!")
         try:
             self.session.revoke(token=self.refresh_token)
 
