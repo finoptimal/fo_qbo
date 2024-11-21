@@ -14,6 +14,7 @@ import collections
 import datetime
 import json
 import os
+import pandas
 import textwrap
 from base64 import b64encode
 from typing import Union, Optional
@@ -26,7 +27,7 @@ from django.conf import settings
 from finoptimal import environment
 from finoptimal.logging import LoggedClass, get_logger, void, returns
 from finoptimal.utilities import retry
-from fo_qbo.errors import TryAgainBusinessValidationError, QBOErrorHandler, RateLimitError
+from fo_qbo.errors import SuspectedTransientError, QBOErrorHandler, RateLimitError
 from .mime_types import MIME_TYPES
 from .qba import QBAuth2
 from .qbo import QBO
@@ -79,10 +80,28 @@ class QBS(LoggedClass):
 
         self.API_BASE_URL = self.api_base_url  # For backwards compatibility
         self.oauth_version = self.OAUTH_VERSION
-        self.qba = QBAuth2(client_code=self.client_code, modifier=modifier, verbosity=self.vb, env=self.qbo_env)
+        self.modifier = modifier
 
         if self.qbo_env == "sandbox":
             self.info(f'API_BASE_URL = {self.API_BASE_URL}')
+
+
+    @property
+    def qba(self):
+        if not hasattr(self, '_qba'):
+            self._qba = QBAuth2(
+                client_code=self.client_code, modifier=self.modifier, verbosity=self.vb, env=self.qbo_env)
+
+        return self._qba
+
+
+    @qba.deleter
+    def qba(self):
+        if hasattr(self, '_qba'):
+            self.note([
+                f"Deleting possibly-broken {self._qba} (with {self._qba.session}) and waiting 3 seconds...",
+            ], log=True, sleep=3)
+            del self._qba
 
 
     @property
@@ -148,7 +167,7 @@ class QBS(LoggedClass):
     def logged_in(self) -> bool:
         return self.qba.logged_in
 
-    @retry(max_tries=3, delay_secs=5, drag_factor=5, exceptions=(TryAgainBusinessValidationError,))
+    @retry(max_tries=3, delay_secs=5, drag_factor=5, exceptions=(SuspectedTransientError,))
     @retry(max_tries=3, delay_secs=5, drag_factor=2, exceptions=(ConnectionError,))
     @retry(max_tries=4, delay_secs=5, drag_factor=3, exceptions=(RateLimitError,))
     @logger.timeit(**returns)
@@ -248,6 +267,8 @@ class QBS(LoggedClass):
             # that's suitable.
             handler = QBOErrorHandler(self, response=response)
             handler.resolve()
+            if handler.has_seen_a_suspected_transient_error:
+                del self.qba # In case something's wrong with the session itself!
 
         if response.status_code in [200]:
             if headers.get("accept") == "application/json":
@@ -269,7 +290,7 @@ class QBS(LoggedClass):
         except:
             error_message = response.text
 
-        self.note(error_message, im=f"Do we need a new QBAuth2 object or can we just retry!?", tracer_at=3, log=True)
+        self.note(error_message, im=f"How'd we handle this QBS error!?", tracer_at=3)
 
         raise ConnectionError(error_message)
 
@@ -739,6 +760,50 @@ class QBS(LoggedClass):
             starting_index += max_count
 
         return missing_values
+
+
+    @property
+    def preferences(self):
+        if not hasattr(self, "_preferences"):
+            self._preferences = self.query("Preferences")
+            self._company_info = self.query("CompanyInfo")
+
+        return self._preferences
+
+
+    @property
+    def company_info(self):
+        self.preferences
+        return self._company_info
+
+
+    @property
+    def company_info_name_values(self):
+        if not hasattr(self, "_company_info_name_values"):
+            self._company_info_name_values = pandas.Series(
+                self.company_info[0]["NameValue"]).apply(
+                pandas.Series).set_index("Name").Value
+
+        return self._company_info_name_values
+
+
+    @property
+    def preferences_name_values(self):
+        if not hasattr(self, "_preferences_name_values"):
+            self._preferences_name_values = pandas.Series(
+                self.preferences[0]["OtherPrefs"]["NameValue"]).apply(
+                pandas.Series).set_index("Name").Value
+
+        return self._preferences_name_values
+
+
+    @property
+    def offering_sku(self):
+        if not hasattr(self, "_offering_sku"):
+            self._offering_sku = self.company_info_name_values["OfferingSku"]
+
+        return self._offering_sku
+
 
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"

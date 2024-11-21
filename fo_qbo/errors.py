@@ -4,11 +4,11 @@ import pandas as pd
 import requests
 
 from finoptimal.firstaid.qbo import create_disconnection_ticket
+from finoptimal.exceptions import APIError
 from finoptimal.logging import LoggedClass
 
 
 class TechnicalError(Exception):
-
     def __init__(self, *args, **kwargs) -> None:
         for keyword, value in kwargs.items():
             setattr(self, keyword, value)
@@ -32,7 +32,7 @@ class BusinessValidationError(TechnicalError):
     pass
 
 
-class TryAgainBusinessValidationError(BusinessValidationError):
+class SuspectedTransientError(TechnicalError):
     """
     Intermittent error we want to stuff and basically just retry:
       https://help.developer.intuit.com/s/question/0D54R00008xOl3zSAC/getting-error-6000-an-unexpected-error-occurred-while-accessing-or-saving-your-data-but-the-entity-saves-anyway
@@ -57,13 +57,14 @@ class QBOErrorHandler(LoggedClass):
     """
     # 400 status_codes with API code 5010 seem related to entities, not entries, and specific to aplus, expensify, and
     # custom code. Not worrying about those for now.
-    SUPPORTED_STATUS_CODES = [200]
+    SUPPORTED_STATUS_CODES = [200, 400]
 
     # 5010 = Stale Object Error
     # 610 = Object Not Found (This CAN be related to NON-caching problems, so further inspection is required)
     CACHING_ERROR_CODES = ['5010', '610']
     MISSING_PARAMETER_ERROR_CODE = '2020'
     BUSINESS_VALIDATION_ERROR_CODES = ['6000']
+    OTHER_SUSPECTED_TRANSIENT_ERROR_CODES = [] #['5020']
 
     def __init__(self,
                  qbs,
@@ -94,6 +95,28 @@ class QBOErrorHandler(LoggedClass):
         del self.response_data
         del self.faults
         del self.error_df
+
+
+    @property
+    def status_code(self):
+        if self.response is None:
+            return None
+
+        return self.response.status_code
+
+    
+    @property
+    def has_seen_a_suspected_transient_error(self) -> bool:
+        if not hasattr(self, "_has_seen_a_suspected_transient_error"):
+            self.has_seen_a_suspected_transient_error = False
+            
+        return self._has_seen_a_suspected_transient_error
+    
+    
+    @has_seen_a_suspected_transient_error.setter
+    def has_seen_a_suspected_transient_error(self, value: bool) -> None:
+        self._has_seen_a_suspected_transient_error = value
+    
 
     @staticmethod
     def get_list_of_faults(data: Union[dict, list]) -> list:
@@ -159,6 +182,15 @@ class QBOErrorHandler(LoggedClass):
     def response(self) -> None:
         self._response = None
 
+
+    @property
+    def url(self):
+        if self.response is None:
+            return None
+
+        return self.response.request.url
+
+
     @property
     def response_data(self) -> Union[dict, list, None]:
         return self._response_data
@@ -179,6 +211,7 @@ class QBOErrorHandler(LoggedClass):
     def faults(self, data: Union[list, dict]) -> None:
         try:
             self._faults = self.get_list_of_faults(data)
+
         except Exception:
             self.exception()
             del self.faults
@@ -206,6 +239,7 @@ class QBOErrorHandler(LoggedClass):
     def error_df(self) -> None:
         self._error_df = pd.DataFrame()
 
+    @property
     def has_caching_errors(self) -> bool:
         if (
             len(self.error_df) > 0 and
@@ -224,28 +258,67 @@ class QBOErrorHandler(LoggedClass):
 
         return False
 
-    def has_try_again_business_validation_errors(self) -> bool:
-        if (
-            len(self.error_df) > 0 and
-            'code' in self.error_df.columns and
-            self.error_df.code.isin(self.BUSINESS_VALIDATION_ERROR_CODES).any()
-        ):
+    @property
+    def has_suspected_transient_errors(self) -> bool:
+        if len(self.error_df) < 1 or not "code" in self.error_df.columns:
+            return False
+
+        if self.error_df.code.isin(self.BUSINESS_VALIDATION_ERROR_CODES).any():
             if 'Detail' in self.error_df.columns:
-                return len(
-                    self.error_df.loc[
-                        self.error_df.Detail.fillna('').str.contains('Please wait a few minutes and try again')
-                    ]
-                ) > 0
+                matching_errors = self.error_df.loc[
+                    self.error_df.code.isin(self.BUSINESS_VALIDATION_ERROR_CODES) &
+                    self.error_df.Detail.fillna('').str.contains('Please wait a few minutes and try again')
+                ]
+                
+                return len(matching_errors) > 0
+
+        if self.error_df.code.isin(self.OTHER_SUSPECTED_TRANSIENT_ERROR_CODES).any():
+            return True
 
         return False
 
+
+    @property
     def has_authorization_errors(self) -> bool:
         return isinstance(self.response_data, dict) and self.response_data.get('x_error_reason') == 'user_not_in_realm'
+
+
+    @property
+    def has_feature_permission_errors(self):
+        if not self.status_code == 400:
+            return False
+
+        if not "code" in self.error_df.columns:
+            return False
+
+        return "5020" in self.error_df.code.values
+
+
+    @property
+    def error_slug(self):
+        if self.has_feature_permission_errors:
+            if "BudgetVsActuals" in self.url:
+                return "qbo-api-error-permission-denied-bva"
+
+            return "qbo-api-error-permission-denied-unspecified"
+
+        return "qbo-api-error-unspecified"
+
+    @property
+    def error_text(self):
+        if self.error_slug == "qbo-api-error-permission-denied-bva":
+            budget_count = len(self._qbs.query("Budget"))
+            return " ".join([
+                f"You are trying to access a QuickBooks Online Budget-vs-Actuals report,",
+                f"but it doesn't look like you have any budgets in your data file!",
+            ])
+
+        return None # which should let the default kick in
 
     def resolve(self) -> None:
         # Will lightly refactor for DRY soon
 
-        if self.has_caching_errors():
+        if self.has_caching_errors:
             self.info('')
             self.info('')
             self.info('===============================================================================================')
@@ -282,7 +355,7 @@ class QBOErrorHandler(LoggedClass):
                 restore_qbo_cache(qbs=self._qbs, days_ago=rollback_days, ignore_cdc_load=True)
                 raise CachingError(error_detail, name=error_name, code=error_code)
 
-        elif self.has_try_again_business_validation_errors():
+        elif self.has_suspected_transient_errors:
             self.info('')
             self.info('')
             self.info('===============================================================================================')
@@ -310,11 +383,20 @@ class QBOErrorHandler(LoggedClass):
                 self.exception()
 
             else:
-                self.note("About to raise TryAgainBusinessValidationError!", tracer_at=3)
-                raise TryAgainBusinessValidationError(error_detail, name=error_name, code=error_code)
+                self.has_seen_a_suspected_transient_error = True
+                self.note("About to raise SuspectedTransientError!", tracer_at=3)
+                raise SuspectedTransientError(error_detail, name=error_name, code=error_code)
 
-        elif self.has_authorization_errors():
+        elif self.has_authorization_errors:
             create_disconnection_ticket(client_code=self._qbs.client_code, user_not_in_realm=True)
+
+        elif self.has_feature_permission_errors:
+            # self.note("Check subscription tier et al?", ta=3)
+            raise APIError(dict(
+                error_slug=self.error_slug,
+                error_text=self.error_text,
+                while_trying_to=f"Call {self.url}",
+            ))
 
 
 if __name__ == '__main__':
@@ -525,9 +607,9 @@ if __name__ == '__main__':
 
     for data in [user_not_in_realm, batch, stale_object_error, ar_customer, not_found, bus_val]:
         er = QBOErrorHandler(sesh.qbs, response_data=data)
-        print(er.has_caching_errors())
-        print(er.has_try_again_business_validation_errors())
-        print(er.has_authorization_errors())
+        print(er.has_caching_errors)
+        print(er.has_suspected_transient_errors)
+        print(er.has_authorization_errors)
 
         # import ipdb;ipdb.set_trace()
         #
