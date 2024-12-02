@@ -657,7 +657,7 @@ class QBAuth2(LoggedClass):
                 self.increment_auth_client_error_retry_count()
                 if self._auth_client_error_retry_count > 2:
                     kwargs = dict( # because otherwise higher-up retries will repeat this trio AGAIN!
-                        error_slug="qbo-api-error-auth-refresh",
+                        error_slug="qbo-api-error-auth",
                         while_trying_to=f"refresh {self}'s access/refresh token!",
                         retries=2,
                         realm_id=self.realm_id,
