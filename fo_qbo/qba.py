@@ -457,7 +457,8 @@ class QBAuth2(LoggedClass):
                     parsed_xml = False
                     reason = f"Unparsed XML response with reason {reason}"
 
-            self.note(resp.text, im="^^ Inspect 401 error more closely!? ^^", tracer_at=5)
+            self.note(f"url: {url}\ndata: {data}")
+            self.note(f"resp.text: {resp.text}", im="^^ Inspect 401 error more closely!? ^^", tracer_at=5)
             self.refresh()
             self.api_logger.info(f'Retrying {method} request due to UnauthorizedError')
             self.last_call_was_unauthorized = True
@@ -466,7 +467,7 @@ class QBAuth2(LoggedClass):
                 raise UnauthorizedError(f'{status_code} {reason}')
 
             kwargs = dict(  # because otherwise higher-up retries will repeat this trio AGAIN!
-                error_slug="qbo-api-error-request",
+                error_slug="qbo-api-error-auth",
                 while_trying_to=f"make a {self} request!",
                 retries=3,
                 realm_id=self.realm_id,
@@ -478,7 +479,7 @@ class QBAuth2(LoggedClass):
                     json.dumps(kwargs),
                     f"{self} --> CompromisedQBOConnectionError when attempting to request!",
                 ]),
-                tracer_at=5)
+                tracer_at=5, log=True)
             raise CompromisedQBOConnectionError(kwargs)
 
         else:

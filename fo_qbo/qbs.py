@@ -213,6 +213,7 @@ class QBS(LoggedClass):
         if self.vb > 7:
             if isinstance(data, dict) or not data:
                 self.print(json.dumps(data, indent=4))
+
             else:
                 if len(data) > 1500:
                     self.print("First 500 characters of data:")
@@ -354,8 +355,7 @@ class QBS(LoggedClass):
 
             resp = self._basic_call(request_type="POST", url=url, data=query)
 
-            if self.vb > 9:
-                self.print(json.dumps(resp, indent=4))
+            self.note(resp, print_at=10)
 
             if not resp or "QueryResponse" not in resp:
                 if self.vb > 1:
