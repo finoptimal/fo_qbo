@@ -609,6 +609,8 @@ class QBAuth2(LoggedClass):
 
         self.token_logger.info(msg, refresh_token=self.refresh_token, access_token=self.access_token)
 
+    MAX_AUTH_RETRIES = 2
+
     @retry(max_tries=3, delay_secs=5, exceptions=(AuthClientError, ))
     @logger.timeit(**void)
     def refresh(self) -> None:
@@ -638,6 +640,7 @@ class QBAuth2(LoggedClass):
                 #  we start getting an AuthClientError:
                 ValueError,
         ) as err:
+            str(err) # for ipdb
             self.last_call_was_unauthorized = True
             self.exception()
 
@@ -656,27 +659,31 @@ class QBAuth2(LoggedClass):
 
             else:
                 self.increment_auth_client_error_retry_count()
-                if self._auth_client_error_retry_count > 2:
-                    kwargs = dict( # because otherwise higher-up retries will repeat this trio AGAIN!
-                        error_slug="qbo-api-error-auth",
-                        while_trying_to=f"refresh {self}'s access/refresh token!",
-                        retries=2,
-                        realm_id=self.realm_id,
-                        team_slug=self.client_code,
-                        intuit_id=getattr(err, "intuit_tid"),
-                        detail=str(err),
-                    )
-                    self.note(
-                        " ".join([
-                            json.dumps(kwargs),
-                            f"{self} --> CompromisedQBOConnectionError from AuthClientError when attempting to refresh!",
-                        ]),
-                        tracer_at=6)
+                if self._auth_client_error_retry_count <= self.MAX_AUTH_RETRIES and \
+                        not self.session.refresh_token is None:
+                    raise
 
-                    raise CompromisedQBOConnectionError(kwargs) from err
+                addl = ""
+                if self.session.refresh_token is None: #454811, e.g.
+                    addl = " without a refresh_token to begin with!"
 
-                # Will stimulate a retry (until we hit the max)
-                raise
+                kwargs = dict( # because otherwise higher-up retries will repeat this trio AGAIN!
+                    error_slug="qbo-api-error-auth",
+                    while_trying_to=f"refresh {self}'s access/refresh token{addl}!",
+                    retries=2,
+                    realm_id=self.realm_id,
+                    team_slug=self.client_code,
+                    intuit_id=getattr(err, "intuit_tid", None),
+                    detail=str(err),
+                )
+                self.note(
+                    kwargs,
+                    im=f"{self} --> CompromisedQBOConnectionError from AuthClientError when attempting to refresh!",
+                    tracer_at=5)
+
+                raise CompromisedQBOConnectionError(kwargs) from err
+
+            # (Now we're back to the else: of the except above)
 
             self.reset_auth_client_error_retry_count()
             return
