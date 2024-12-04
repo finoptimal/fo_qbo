@@ -192,6 +192,14 @@ class QBOErrorHandler(LoggedClass):
 
 
     @property
+    def request_body(self):
+        if self.response is None:
+            return None
+
+        return self.response.request.body
+
+
+    @property
     def response_data(self) -> Union[dict, list, None]:
         return self._response_data
 
@@ -395,7 +403,7 @@ class QBOErrorHandler(LoggedClass):
             raise APIError(dict(
                 error_slug=self.error_slug,
                 error_text=self.error_text,
-                while_trying_to=f"Call {self.url}",
+                while_trying_to=f"Call {self.url} with body[:250]: {str(self.request_body)[:250]}",
             ))
 
 
