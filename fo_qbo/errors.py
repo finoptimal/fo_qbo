@@ -6,6 +6,7 @@ import requests
 from finoptimal.firstaid.qbo import create_disconnection_ticket
 from finoptimal.exceptions import APIError
 from finoptimal.logging import LoggedClass
+from finoptimal.utilities import smart_listify
 
 
 class TechnicalError(Exception):
@@ -292,14 +293,40 @@ class QBOErrorHandler(LoggedClass):
 
 
     @property
+    def error_codes_list(self):
+        if len(self.error_df) < 1 or not "code" in self.error_df.columns:
+            return []
+
+        return self.error_df.code.unique().tolist()
+
+
+    def check_to_see_if_error_codes_include(self, error_codes, status_code_filter=None):
+        if not status_code_filter is None and not self.status_code == int(status_code_filter):
+            return False
+
+        matching_error_codes = set(self.error_codes_list).intersection(smart_listify(error_codes))
+
+        if len(matching_error_codes) > 0:
+            return True
+
+        return False
+
+
+    @property
     def has_feature_permission_errors(self):
-        if not self.status_code == 400:
-            return False
+        # if not self.status_code == 400:
+        #     return False
+        #
+        # if not "code" in self.error_df.columns:
+        #     return False
+        #
+        # return "5020" in self.error_df.code.values
+        return self.check_to_see_if_error_codes_include("5020", status_code_filter=400)
 
-        if not "code" in self.error_df.columns:
-            return False
 
-        return "5020" in self.error_df.code.values
+    @property
+    def has_report_is_too_large_errors(self):
+        return self.check_to_see_if_error_codes_include(["-30157", "10100"])
 
 
     @property
@@ -308,9 +335,10 @@ class QBOErrorHandler(LoggedClass):
             if "BudgetVsActuals" in self.url:
                 return "qbo-api-error-permission-denied-bva"
 
-            return "qbo-api-error-permission-denied-unspecified"
+        if self.has_report_is_too_large_errors:
+            return "qbo-api-error-too-large"
 
-        return "qbo-api-error-unspecified"
+        return "unhandled-error"
 
     @property
     def error_text(self):
@@ -319,6 +347,12 @@ class QBOErrorHandler(LoggedClass):
             return " ".join([
                 f"You are trying to access a QuickBooks Online Budget-vs-Actuals report,",
                 f"but it doesn't look like you have any budgets in your data file!",
+            ])
+
+        if self.error_slug == "qbo-api-error-too-large":
+            return " ".join([
+                "QuickBooks Online thinks this report has too much data in it. Please review the parameters and try",
+                "to customize it to reduce the result's size.",
             ])
 
         return None # which should let the default kick in
@@ -398,7 +432,10 @@ class QBOErrorHandler(LoggedClass):
         elif self.has_authorization_errors:
             create_disconnection_ticket(client_code=self._qbs.client_code, user_not_in_realm=True)
 
-        elif self.has_feature_permission_errors:
+        elif any([
+            self.has_feature_permission_errors,
+            self.has_report_is_too_large_errors,
+        ]):
             # self.note("Check subscription tier et al?", ta=3)
             raise APIError(dict(
                 error_slug=self.error_slug,

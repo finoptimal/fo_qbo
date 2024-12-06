@@ -330,7 +330,7 @@ class QBAuth2(LoggedClass):
     def _delete_credentials(self) -> None:
         """Deletes the client's credentials from the Google Cloud bucket."""
         self.fo_darkonim.delete_client_credentials()
-
+        
 
     def _login(self) -> bool:
         """
