@@ -295,6 +295,20 @@ class QBS(LoggedClass):
 
         raise ConnectionError(error_message)
 
+
+    @property
+    def last_counts(self):
+        return pandas.Series(self.last_object_counts)
+
+
+    @property
+    def last_object_counts(self):
+        if not hasattr(self, "_last_object_counts"):
+            self._last_object_counts = dict()
+
+        return self._last_object_counts
+
+
     @logger.timeit(**returns)
     def query(self,
               object_type: str,
@@ -372,7 +386,10 @@ class QBS(LoggedClass):
                 raise Exception("Failed QBO Query")
 
             if count_only:
-                return resp["QueryResponse"]["totalCount"]
+                total_count = resp["QueryResponse"]["totalCount"]
+                if where_tail in [None, "", " Active in (true,false)"]:
+                    self.last_object_counts["object_type"] = total_count
+                return total_count
 
             alias          = self.ALIASES.get(object_type, object_type)
             objs           = resp["QueryResponse"].get(alias, [])
@@ -394,11 +411,19 @@ class QBS(LoggedClass):
 
             all_objs      += objs
 
-            if self.vb > 4 and max_results > 0:
-                self.print("Queried {:20s} objects {:>4} through {:4>}.".format(
-                    object_type,
-                    start_position,
-                    start_position + max_results - 1))
+            if max_results > 0:
+                count_block = "" if not object_type in self.last_object_counts \
+                    else f"of {self.last_object_counts[object_type]:,.0f:}"
+                progress_note = " ".join([
+                    f"Queried {object_type:20s} objects {start_position:,.0f}",
+                    f"through {start_position + max_results - 1:,.0f}{count_block}.",
+                ])
+                self.note(progress_note, ta=11)
+                # if self.vb > 4:
+                #     self.print("Queried {:20s} objects {:>4} through {:4>}.".format(
+                #         object_type,
+                #         start_position,
+                #         start_position + max_results - 1))
 
             if max_results < per_page:
                 queried_all = True
@@ -808,6 +833,7 @@ class QBS(LoggedClass):
     def __repr__(self):
         return f"<{self.cid} QBS (OAuth Version {self.oauth_version})>"
 
+
     @property
     def touchless_mode(self) -> bool:
         """bool: Touchless mode was activated from the command line."""
@@ -815,6 +841,7 @@ class QBS(LoggedClass):
             self._touchless_mode = True if self.job and self.job.args.get('touchless_mode') else False
 
         return self._touchless_mode
+
 
     def touchless_test(self) -> None:
         """Raise an Exception if `touchless_mode` is True."""
@@ -824,9 +851,11 @@ class QBS(LoggedClass):
             import ipdb;ipdb.set_trace()
             raise Exception(error)
 
+
     @property
     def caller(self) -> str:
         return self.qba.caller
+
 
     @property
     def realm_id(self) -> str:
